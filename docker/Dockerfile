@@ -14,11 +14,22 @@ RUN apt-get -y install file unzip zip xz-utils git \
                          gcc g++ cmake default-jdk \
                          python3
 
-ADD docker/apache-maven-3.6.3-bin.tar.gz /usr/local
-RUN ln -s /usr/local/apache-maven-3.6.3/bin/mvn /usr/local/bin
-COPY template_cpp /root/template_cpp
-COPY template_java /root/template_java
-ADD barrier.py /root
+ARG user=app
+ARG group=app
+ARG uid=1000
+ARG gid=1000
 
-RUN /root/template_cpp/build.sh && /root/template_cpp/cleanup.sh
-RUN /root/template_java/build.sh && /root/template_java/cleanup.sh
+RUN addgroup --gid ${gid} ${group} && \
+        adduser --uid ${uid} \
+                --ingroup ${group} \
+                --gecos "" \
+                --disabled-password \
+                --shell /bin/bash \
+                ${user}
+
+
+RUN mkdir -p /app && chown -R ${user}:${user} /app
+
+USER ${user}
+
+WORKDIR /app
