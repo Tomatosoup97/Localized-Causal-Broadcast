@@ -6,7 +6,6 @@
 #include "parser.hpp"
 #include <signal.h>
 
-
 static void stop(int) {
   // reset signal handlers to default
   signal(SIGTERM, SIG_DFL);
@@ -36,8 +35,9 @@ int main(int argc, char **argv) {
   std::cout << std::endl;
 
   std::cout << "My PID: " << getpid() << "\n";
-  std::cout << "From a new terminal type `kill -SIGINT " << getpid() << "` or `kill -SIGTERM "
-            << getpid() << "` to stop processing packets\n\n";
+  std::cout << "From a new terminal type `kill -SIGINT " << getpid()
+            << "` or `kill -SIGTERM " << getpid()
+            << "` to stop processing packets\n\n";
 
   std::cout << "My ID: " << parser.id() << "\n\n";
 
