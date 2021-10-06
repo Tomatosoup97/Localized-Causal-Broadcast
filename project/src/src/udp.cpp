@@ -35,8 +35,7 @@ ssize_t send_udp_packet(int sockfd, node_t *receiver, const uint8_t *buffer,
                 sizeof(recipent_addr));
 }
 
-// TODO: return payload_t
-in_addr receive_udp_packet(int sockfd, uint8_t *buffer, size_t buff_len) {
+void receive_udp_packet(int sockfd, uint8_t *buffer, size_t buff_len) {
   /* Receive UDP packet from socket and return sender ip addr */
 
   struct sockaddr_in sender;
@@ -54,7 +53,6 @@ in_addr receive_udp_packet(int sockfd, uint8_t *buffer, size_t buff_len) {
   inet_ntop(AF_INET, &(sender.sin_addr), sender_ip_str, sizeof(sender_ip_str));
 
   fflush(stdout);
-  return sender.sin_addr;
 }
 
 void encode_udp_payload(payload_t *payload, uint8_t *buffer) {
@@ -67,6 +65,19 @@ void decode_udp_payload(payload_t *payload, uint8_t *buffer) {
   memcpy(&payload->sender_id, buffer + 8, 4);
   memcpy(&payload->packet_uid, buffer + 4, 4);
   memcpy(&payload->message, buffer, 4);
+}
+
+void show_payload(payload_t *payload) {
+  if (DEBUG) {
+    uint64_t message;
+    uint64_t packet_uid;
+    uint64_t sender_id;
+
+    std::cout << "Payload contents:\n"
+              << "\tmessage: \t" << payload->message << "\n"
+              << "\tpacket uid: \t" << payload->packet_uid << "\n"
+              << "\tsender id: \t" << payload->sender_id << "\n";
+  }
 }
 
 int select_socket(int sockfd, int secs, int milisecs) {
