@@ -96,13 +96,12 @@ int main(int argc, char **argv) {
       int is_socket_ready;
       int sockfd = receive_sockfd;
 
-      /* while ((is_socket_ready = select_socket(sockfd, 0,
-       * MAX_PACKET_WAIT_MS))) { */
-      uint8_t buffer[1024];
-      in_addr sender_ip_addr = receive_udp_packet(sockfd, buffer, 1024);
-      std::cout << "Got the message! from: " << inet_ntoa(sender_ip_addr)
-                << "\n\n";
-      /* } */
+      while ((is_socket_ready = select_socket(sockfd, 0, MAX_PACKET_WAIT_MS))) {
+        uint8_t buffer[1024];
+        in_addr sender_ip_addr = receive_udp_packet(sockfd, buffer, 1024);
+        std::cout << "Got the message! from: " << inet_ntoa(sender_ip_addr)
+                  << "\n\n";
+      }
     }
   } else {
     std::cout << "Broadcasting and delivering messages...\n\n";
@@ -111,12 +110,13 @@ int main(int argc, char **argv) {
     ssize_t message_len;
 
     uint8_t buffer[1024];
-    const char* hello = "Hello";
+    const char *hello = "Hello";
 
     while (true) {
       std::this_thread::sleep_for(std::chrono::seconds(2));
       message_len = send_udp_packet(receive_sockfd, &receiver_node,
-                                    reinterpret_cast<const uint8_t*>(hello), strlen(hello));
+                                    reinterpret_cast<const uint8_t *>(hello),
+                                    strlen(hello));
 
       std::cout << "Sending message to..." << ntohs(receiver_node.port) << "\n";
     }

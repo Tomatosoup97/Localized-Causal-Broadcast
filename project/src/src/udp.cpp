@@ -43,9 +43,8 @@ in_addr receive_udp_packet(int sockfd, uint8_t *buffer, size_t buff_len) {
   socklen_t sender_len = sizeof(sender);
 
   std::cout << "Receiving the message...\n";
-  // TODO: MSG_DONTWAIT & select
   ssize_t datagram_len =
-      recvfrom(sockfd, buffer, buff_len, MSG_WAITALL,
+      recvfrom(sockfd, buffer, buff_len, MSG_DONTWAIT,
                reinterpret_cast<struct sockaddr *>(&sender), &sender_len);
   std::cout << "Received!...\n";
   if (datagram_len < 0)
