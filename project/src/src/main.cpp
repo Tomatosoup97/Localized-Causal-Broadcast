@@ -93,18 +93,19 @@ int main(int argc, char **argv) {
   node_t receiver_node = nodes[get_node_idx_by_id(nodes, receiver_id)];
   node_t myself_node = nodes[get_node_idx_by_id(nodes, parser.id())];
   payload_t payload;
+  ssize_t message_len;
+  uint8_t buffer[IP_MAXPACKET];
+  int sockfd;
 
   bool should_send_messages = receiver_id != parser.id();
+  bool is_receiver = !should_send_messages;
 
   if (should_send_messages) {
     if (DEBUG) {
       std::cout << "Sending messages...\n\n";
     }
 
-    int sockfd = init_socket();
-    ssize_t message_len;
-
-    uint8_t buffer[IP_MAXPACKET];
+    sockfd = init_socket();
 
     for (uint64_t i = 0; i < msgs_to_send_count; i++) {
       if (DEBUG) {
@@ -126,19 +127,29 @@ int main(int argc, char **argv) {
     std::cout << "Delivering messages...\n\n";
   }
 
-  int receive_sockfd = bind_socket(myself_node.port);
+  sockfd = bind_socket(myself_node.port);
 
   while (true) {
     int is_socket_ready;
-    int sockfd = receive_sockfd;
 
     while ((is_socket_ready = select_socket(sockfd, 0, MAX_PACKET_WAIT_MS))) {
-      uint8_t buffer[IP_MAXPACKET];
       receive_udp_packet(sockfd, buffer, IP_MAXPACKET);
       decode_udp_payload(&payload, buffer);
 
-      std::cout << "Got the message! from: " << payload.sender_id << "\n\n";
       show_payload(&payload);
+      if (DEBUG)
+        std::cout << "Got the message! from: " << payload.sender_id << "\n\n";
+
+      node_t sender_node = nodes[get_node_idx_by_id(nodes, payload.sender_id)];
+
+      if (is_receiver) {
+        if (DEBUG)
+          std::cout << "Sending back ACK...\n";
+        // encode_udp_payload_as_ack_packet(&payload, buffer);
+
+        message_len =
+            send_udp_packet(sockfd, &sender_node, buffer, sizeof(ack_packet_t));
+      }
     }
   }
 

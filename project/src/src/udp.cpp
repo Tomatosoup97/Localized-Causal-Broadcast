@@ -67,6 +67,18 @@ void decode_udp_payload(payload_t *payload, uint8_t *buffer) {
   memcpy(&payload->message, buffer, 4);
 }
 
+/*
+void encode_udp_payload_as_ack_packet(payload_t *payload, uint8_t *buffer) {
+  memcpy(buffer, &payload->packet_uid, 4);
+  memcpy(buffer + 4, &payload->sender_id, 4);
+}
+
+void decode_udp_ack_packet(ack_packet_t *ack_packet, uint8_t *buffer) {
+  memcpy(&payload->sender_id, buffer + 4, 4);
+  memcpy(&payload->packet_uid, buffer, 4);
+}
+*/
+
 void show_payload(payload_t *payload) {
   if (DEBUG) {
     uint64_t message;

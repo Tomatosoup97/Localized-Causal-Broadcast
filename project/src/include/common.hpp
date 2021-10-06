@@ -22,11 +22,18 @@ typedef struct {
 
 typedef struct in_addr ip_addr_t;
 
+// TODO: asses if we really need uint64_t instead of uint32_t
+
 typedef struct {
   uint64_t message;
   uint64_t packet_uid;
   uint64_t sender_id;
 } payload_t;
+
+typedef struct {
+  uint64_t packet_uid;
+  uint64_t receiver_id;
+} ack_packet_t;
 
 typedef struct {
   unsigned long id;
