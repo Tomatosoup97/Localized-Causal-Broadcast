@@ -1,3 +1,4 @@
+#include <chrono>
 #include <iostream>
 #include <sys/types.h>
 #include <thread>
@@ -8,7 +9,8 @@
 #include "udp.hpp"
 
 #define MAX_PACKET_WAIT_MS 100
-#define SENDING_CHUNK_SIZE 100000
+#define SENDING_CHUNK_SIZE 1000000
+#define RETRANSMISSION_OFFSET_MS 150
 
 void send_messages(int sockfd, uint32_t msgs_to_send_count, bool *delivered,
                    node_t *receiver_node, node_t *sender_node,
@@ -74,4 +76,13 @@ void keep_sending_messages_from_queue(int sockfd,
     node_t sender_node = nodes[get_node_idx_by_id(nodes, payload->sender_id)];
     was_sent = send_udp_payload(sockfd, &sender_node, payload);
   }
+}
+
+bool should_start_retransmission(
+    std::chrono::steady_clock::time_point sending_start) {
+  std::chrono::steady_clock::time_point current_time = std::chrono::steady_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+      current_time - sending_start);
+  int64_t ms_since_last_sending = duration.count() / 1000;
+  return ms_since_last_sending > RETRANSMISSION_OFFSET_MS;
 }

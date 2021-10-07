@@ -10,8 +10,6 @@
 #include "udp.hpp"
 #include <signal.h>
 
-#define RETRANSMISSION_OFFSET_MS 150
-
 bool *delivered;
 uint32_t first_undelivered = 0;
 uint32_t msgs_to_send_count;
@@ -43,6 +41,7 @@ static void dump_to_output() {
       continue;
     }
 
+    // TODO: log actual sender_id
     if (is_receiver) {
       output_file << "d "
                   << "1"
@@ -121,20 +120,13 @@ int main(int argc, char **argv) {
   int sockfd = bind_socket(myself_node.port);
 
   std::chrono::steady_clock::time_point sending_start;
-  std::chrono::steady_clock::time_point current_time;
 
   // Spawn thread for receiving messages
   std::thread receiver_thread(keep_receiving_messages, sockfd, delivered,
                               is_receiver, std::ref(nodes), &finito);
 
   while (should_send_messages) {
-    current_time = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-        current_time - sending_start);
-    int64_t ms_since_last_sending = duration.count() / 1000;
-
-    if (should_send_messages &&
-        ms_since_last_sending > RETRANSMISSION_OFFSET_MS) {
+    if (should_start_retransmission(sending_start)) {
 
       sending_start = std::chrono::steady_clock::now();
 

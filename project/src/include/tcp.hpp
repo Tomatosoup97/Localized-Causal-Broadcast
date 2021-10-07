@@ -18,4 +18,8 @@ void keep_receiving_messages(int sockfd, bool *delivered, bool is_receiver,
 void keep_sending_messages_from_queue(int sockfd,
                                       SafeQueue<payload_t *> &messages_queue,
                                       std::vector<node_t> &nodes, bool *finito);
+
+bool should_start_retransmission(
+    std::chrono::steady_clock::time_point sending_start);
+
 #endif
