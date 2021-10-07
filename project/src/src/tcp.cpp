@@ -4,6 +4,7 @@
 
 #include "common.hpp"
 #include "tcp.hpp"
+#include "ts_queue.hpp"
 #include "udp.hpp"
 
 #define MAX_PACKET_WAIT_MS 100
@@ -60,4 +61,17 @@ void keep_receiving_messages(int sockfd, bool *delivered, bool is_receiver,
 
   while (!*finito)
     receive_message(sockfd, delivered, is_receiver, nodes);
+}
+
+void keep_sending_messages_from_queue(int sockfd,
+                                      SafeQueue<payload_t *> &messages_queue,
+                                      std::vector<node_t> &nodes,
+                                      bool *finito) {
+  bool was_sent;
+
+  while (!*finito) {
+    payload_t *payload = messages_queue.dequeue();
+    node_t sender_node = nodes[get_node_idx_by_id(nodes, payload->sender_id)];
+    was_sent = send_udp_payload(sockfd, &sender_node, payload);
+  }
 }
