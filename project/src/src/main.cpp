@@ -10,11 +10,13 @@
 #include "udp.hpp"
 #include <signal.h>
 
-#define RETRANSMISSION_OFFSET_MS 100
+#define RETRANSMISSION_OFFSET_MS 0
 
+// TODO: this should be atomic
 bool *delivered;
 uint64_t first_undelivered = 0;
 uint64_t msgs_to_send_count;
+bool finito = false;
 
 static bool all_delivered() {
   return first_undelivered == (msgs_to_send_count - 1) &&
@@ -128,14 +130,11 @@ int main(int argc, char **argv) {
   std::chrono::steady_clock::time_point sending_start;
   std::chrono::steady_clock::time_point current_time;
 
-  if (DEBUG) {
-    if (is_receiver)
-      std::cout << "Waiting for delivering messages...\n\n";
-    else
-      std::cout << "Sending messages to node " << receiver_id << "...\n\n";
-  }
+  // Spawn thread for receiving messages
+  std::thread receiver_thread(keep_receiving_messages, sockfd, delivered,
+                              is_receiver, std::ref(nodes), &finito);
 
-  while (true) {
+  while (should_send_messages) {
     current_time = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
         current_time - sending_start);
@@ -150,13 +149,14 @@ int main(int argc, char **argv) {
                     &myself_node, &first_undelivered);
 
       if (DEBUG && all_delivered()) {
+        finito = true;
         std::cout << "\n\nAll done, no more messages to send! :)\n\n";
         break;
       }
     }
-
-    receive_message(sockfd, delivered, is_receiver, nodes);
   }
+
+  receiver_thread.join();
 
   release_memory();
   return 0;

@@ -6,8 +6,8 @@
 #include "tcp.hpp"
 #include "udp.hpp"
 
-#define MAX_PACKET_WAIT_MS 50
-#define SENDING_CHUNK_SIZE 1000
+#define MAX_PACKET_WAIT_MS 100
+#define SENDING_CHUNK_SIZE 100000
 
 void send_messages(int sockfd, uint64_t msgs_to_send_count, bool *delivered,
                    node_t *receiver_node, node_t *sender_node,
@@ -54,4 +54,11 @@ void receive_message(int sockfd, bool *delivered, bool is_receiver,
       delivered[payload.packet_uid] = true;
     }
   }
+}
+
+void keep_receiving_messages(int sockfd, bool *delivered, bool is_receiver,
+                             std::vector<node_t> &nodes, bool *finito) {
+
+  while (!*finito)
+    receive_message(sockfd, delivered, is_receiver, nodes);
 }

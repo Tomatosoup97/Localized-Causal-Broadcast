@@ -11,4 +11,7 @@ void send_messages(int sockfd, uint64_t msgs_to_send_count, bool *delivered,
 void receive_message(int sockfd, bool *delivered, bool is_receiver,
                      std::vector<node_t> &nodes);
 
+void keep_receiving_messages(int sockfd, bool *delivered, bool is_receiver,
+                             std::vector<node_t> &nodes, bool *finito);
+
 #endif
