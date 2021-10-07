@@ -6,40 +6,22 @@
 
 #include "common.hpp"
 #include "parser.hpp"
+#include "tcp.hpp"
 #include "udp.hpp"
 #include <signal.h>
 
-#define MAX_PACKET_WAIT_MS 150
+#define RETRANSMISSION_OFFSET_MS 100
 
-static void stop(int) {
-  // reset signal handlers to default
-  signal(SIGTERM, SIG_DFL);
-  signal(SIGINT, SIG_DFL);
+bool *delivered;
+uint64_t first_undelivered = 0;
+uint64_t msgs_to_send_count;
 
-  // immediately stop network packet processing
-  std::cout << "Immediately stopping network packet processing.\n";
-
-  // write/flush output file if necessary
-  std::cout << "Writing output.\n";
-
-  // exit directly from signal handler
-  exit(0);
+static bool all_delivered() {
+  return first_undelivered == (msgs_to_send_count - 1) &&
+         delivered[first_undelivered];
 }
 
-int main(int argc, char **argv) {
-  signal(SIGTERM, stop);
-  signal(SIGINT, stop);
-
-  // `true` means that a config file is required.
-  // Call with `false` if no config file is necessary.
-  bool requireConfig = true;
-
-  Parser parser(argc, argv);
-  parser.parse();
-
-  auto hosts = parser.hosts();
-  std::vector<node_t> nodes;
-
+static void show_init_info(Parser parser, std::vector<Host> hosts) {
   if (DEBUG) {
     std::cout << std::endl;
 
@@ -74,6 +56,45 @@ int main(int argc, char **argv) {
 
     std::cout << "Initializing...\n\n";
   }
+}
+
+static void release_memory() {
+  if (DEBUG)
+    std::cout << "Cleaning up memory...\n";
+
+  delete[] delivered;
+}
+
+static void stop(int) {
+  // reset signal handlers to default
+  signal(SIGTERM, SIG_DFL);
+  signal(SIGINT, SIG_DFL);
+
+  // immediately stop network packet processing
+  if (DEBUG)
+    std::cout << "Immediately stopping network packet processing.\n";
+
+  // write/flush output file if necessary
+  if (DEBUG)
+    std::cout << "Writing output.\n";
+
+  release_memory();
+  exit(0);
+}
+
+int main(int argc, char **argv) {
+  signal(SIGTERM, stop);
+  signal(SIGINT, stop);
+
+  // `true` means that a config file is required.
+  // Call with `false` if no config file is necessary.
+  bool requireConfig = true;
+
+  Parser parser(argc, argv);
+  parser.parse();
+
+  auto hosts = parser.hosts();
+  std::vector<node_t> nodes;
 
   for (auto &host : hosts) {
     node_t node;
@@ -84,74 +105,59 @@ int main(int argc, char **argv) {
   }
 
   std::ifstream configFile(parser.configPath());
-  uint64_t msgs_to_send_count;
   size_t receiver_id;
 
   configFile >> msgs_to_send_count;
   configFile >> receiver_id;
 
-  node_t receiver_node = nodes[get_node_idx_by_id(nodes, receiver_id)];
-  node_t myself_node = nodes[get_node_idx_by_id(nodes, parser.id())];
+  delivered = new bool[msgs_to_send_count]{false};
+
   payload_t payload;
   ssize_t message_len;
   uint8_t buffer[IP_MAXPACKET];
-  int sockfd;
+
+  node_t receiver_node = nodes[get_node_idx_by_id(nodes, receiver_id)];
+  node_t myself_node = nodes[get_node_idx_by_id(nodes, parser.id())];
 
   bool should_send_messages = receiver_id != parser.id();
   bool is_receiver = !should_send_messages;
+  bool was_sent;
 
-  if (should_send_messages) {
-    if (DEBUG) {
-      std::cout << "Sending messages...\n\n";
-    }
+  int sockfd = bind_socket(myself_node.port);
 
-    sockfd = init_socket();
-
-    for (uint64_t i = 0; i < msgs_to_send_count; i++) {
-      if (DEBUG) {
-        std::cout << "Sending message to..." << ntohs(receiver_node.port)
-                  << "\n";
-      }
-
-      payload.message = i;
-      payload.packet_uid = 42;
-      payload.sender_id = myself_node.id;
-      encode_udp_payload(&payload, buffer);
-
-      message_len =
-          send_udp_packet(sockfd, &receiver_node, buffer, sizeof(payload_t));
-    }
-  }
+  std::chrono::steady_clock::time_point sending_start;
+  std::chrono::steady_clock::time_point current_time;
 
   if (DEBUG) {
-    std::cout << "Delivering messages...\n\n";
+    if (is_receiver)
+      std::cout << "Waiting for delivering messages...\n\n";
+    else
+      std::cout << "Sending messages to node " << receiver_id << "...\n\n";
   }
-
-  sockfd = bind_socket(myself_node.port);
 
   while (true) {
-    int is_socket_ready;
+    current_time = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+        current_time - sending_start);
+    int64_t ms_since_last_sending = duration.count() / 1000;
 
-    while ((is_socket_ready = select_socket(sockfd, 0, MAX_PACKET_WAIT_MS))) {
-      receive_udp_packet(sockfd, buffer, IP_MAXPACKET);
-      decode_udp_payload(&payload, buffer);
+    if (should_send_messages &&
+        ms_since_last_sending > RETRANSMISSION_OFFSET_MS) {
 
-      show_payload(&payload);
-      if (DEBUG)
-        std::cout << "Got the message! from: " << payload.sender_id << "\n\n";
+      sending_start = std::chrono::steady_clock::now();
 
-      node_t sender_node = nodes[get_node_idx_by_id(nodes, payload.sender_id)];
+      send_messages(sockfd, msgs_to_send_count, delivered, &receiver_node,
+                    &myself_node, &first_undelivered);
 
-      if (is_receiver) {
-        if (DEBUG)
-          std::cout << "Sending back ACK...\n";
-        // encode_udp_payload_as_ack_packet(&payload, buffer);
-
-        message_len =
-            send_udp_packet(sockfd, &sender_node, buffer, sizeof(ack_packet_t));
+      if (DEBUG && all_delivered()) {
+        std::cout << "\n\nAll done, no more messages to send! :)\n\n";
+        break;
       }
     }
+
+    receive_message(sockfd, delivered, is_receiver, nodes);
   }
 
+  release_memory();
   return 0;
 }

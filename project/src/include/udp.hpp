@@ -2,6 +2,7 @@
 #define _UDP_H_
 
 #include "common.hpp"
+#include <vector>
 
 #define printf_ip_addr(str, addr)                                              \
   ({                                                                           \
@@ -14,6 +15,8 @@ typedef struct in_addr ip_addr_t;
 
 size_t get_node_idx_by_id(std::vector<node_t> &nodes, unsigned long id);
 
+bool send_udp_payload(int sockfd, node_t *receiver, payload_t *payload);
+void receive_udp_payload(int sockfd, payload_t *payload);
 ssize_t send_udp_packet(int sockfd, node_t *receiver, const uint8_t *buffer,
                         ssize_t buff_len);
 void receive_udp_packet(int sockfd, uint8_t *buffer, size_t buff_len);
