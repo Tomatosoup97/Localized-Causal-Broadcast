@@ -90,15 +90,15 @@ void receive_udp_packet(int sockfd, uint8_t *buffer, size_t buff_len) {
 }
 
 void encode_udp_payload(payload_t *payload, uint8_t *buffer) {
-  memcpy(buffer, &payload->message, 8);
-  memcpy(buffer + 8, &payload->packet_uid, 8);
-  memcpy(buffer + 16, &payload->sender_id, 8);
+  memcpy(buffer, &payload->message, 4);
+  memcpy(buffer + 4, &payload->packet_uid, 4);
+  memcpy(buffer + 8, &payload->sender_id, 4);
 }
 
 void decode_udp_payload(payload_t *payload, uint8_t *buffer) {
-  memcpy(&payload->sender_id, buffer + 16, 8);
-  memcpy(&payload->packet_uid, buffer + 8, 8);
-  memcpy(&payload->message, buffer, 8);
+  memcpy(&payload->sender_id, buffer + 8, 4);
+  memcpy(&payload->packet_uid, buffer + 4, 4);
+  memcpy(&payload->message, buffer, 4);
 }
 
 /*
@@ -115,10 +115,6 @@ void decode_udp_ack_packet(ack_packet_t *ack_packet, uint8_t *buffer) {
 
 void show_payload(payload_t *payload) {
   if (DEBUG) {
-    uint64_t message;
-    uint64_t packet_uid;
-    uint64_t sender_id;
-
     std::cout << "Payload: "
               << "{ message: " << payload->message
               << ", packet uid: " << payload->packet_uid

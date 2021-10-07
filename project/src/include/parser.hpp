@@ -21,7 +21,7 @@
 
 struct Host {
   Host() {}
-  Host(size_t id, std::string &ip_or_hostname, unsigned short port)
+  Host(uint32_t id, std::string &ip_or_hostname, unsigned short port)
       : id{id}, port{htons(port)} {
 
     if (isValidIpAddress(ip_or_hostname.c_str())) {
@@ -39,7 +39,7 @@ struct Host {
 
   unsigned short portReadable() const { return ntohs(port); }
 
-  unsigned long id;
+  uint32_t id;
   in_addr_t ip;
   unsigned short port;
 
@@ -146,7 +146,7 @@ public:
         continue;
       }
 
-      unsigned long id;
+      uint32_t id;
       std::string ip;
       unsigned short port;
 

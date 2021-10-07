@@ -11,8 +11,9 @@
 #include <sys/types.h>
 
 // Program flags
-#define DEBUG 1
-#define VERBOSE 1
+#define DEBUG 0
+#define KEEP_ALIVE 0
+#define DUMP_TO_FILE 0
 
 #define IP_MAXPACKET 65535
 
@@ -22,21 +23,21 @@ typedef struct {
 
 typedef struct in_addr ip_addr_t;
 
-// TODO: asses if we really need uint64_t instead of uint32_t
+// TODO: asses if we really need uint32_t instead of uint32_t
 
 typedef struct {
-  uint64_t message;
-  uint64_t packet_uid;
-  uint64_t sender_id;
+  uint32_t message;
+  uint32_t packet_uid;
+  uint32_t sender_id;
 } payload_t;
 
 typedef struct {
-  uint64_t packet_uid;
-  uint64_t receiver_id;
+  uint32_t packet_uid;
+  uint32_t receiver_id;
 } ack_packet_t;
 
 typedef struct {
-  unsigned long id;
+  uint32_t id;
   in_addr_t ip;
   unsigned short port;
 } node_t;

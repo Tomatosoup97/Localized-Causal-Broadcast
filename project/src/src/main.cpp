@@ -10,54 +10,19 @@
 #include "udp.hpp"
 #include <signal.h>
 
-#define RETRANSMISSION_OFFSET_MS 0
+#define RETRANSMISSION_OFFSET_MS 150
 
-// TODO: this should be atomic
 bool *delivered;
-uint64_t first_undelivered = 0;
-uint64_t msgs_to_send_count;
+uint32_t first_undelivered = 0;
+uint32_t msgs_to_send_count;
 bool finito = false;
+
+const char *output_path;
+bool is_receiver;
 
 static bool all_delivered() {
   return first_undelivered == (msgs_to_send_count - 1) &&
          delivered[first_undelivered];
-}
-
-static void show_init_info(Parser parser, std::vector<Host> hosts) {
-  if (DEBUG) {
-    std::cout << std::endl;
-
-    std::cout << "My PID: " << getpid() << "\n";
-    std::cout << "From a new terminal type `kill -SIGINT " << getpid()
-              << "` or `kill -SIGTERM " << getpid()
-              << "` to stop processing packets\n\n";
-
-    std::cout << "My ID: " << parser.id() << "\n\n";
-
-    std::cout << "List of resolved hosts is:\n";
-    std::cout << "==========================\n";
-
-    for (auto &host : hosts) {
-      std::cout << host.id << "\n";
-      std::cout << "Human-readable IP: " << host.ipReadable() << "\n";
-      std::cout << "Machine-readable IP: " << host.ip << "\n";
-      std::cout << "Human-readbale Port: " << host.portReadable() << "\n";
-      std::cout << "Machine-readbale Port: " << host.port << "\n";
-      std::cout << "\n";
-    }
-
-    std::cout << "\n";
-
-    std::cout << "Path to output:\n";
-    std::cout << "===============\n";
-    std::cout << parser.outputPath() << "\n\n";
-
-    std::cout << "Path to config:\n";
-    std::cout << "===============\n";
-    std::cout << parser.configPath() << "\n\n";
-
-    std::cout << "Initializing...\n\n";
-  }
 }
 
 static void release_memory() {
@@ -65,6 +30,29 @@ static void release_memory() {
     std::cout << "Cleaning up memory...\n";
 
   delete[] delivered;
+}
+
+static void dump_to_output() {
+  if (DEBUG)
+    std::cout << "Dumping to file...\n";
+
+  std::ofstream output_file(output_path);
+
+  for (uint32_t i = 0; i < msgs_to_send_count; i++) {
+    if (!delivered[i]) {
+      continue;
+    }
+
+    if (is_receiver) {
+      output_file << "d "
+                  << "1"
+                  << " " << i << "\n";
+    } else {
+      output_file << "b " << i << "\n";
+    }
+  }
+
+  output_file.close();
 }
 
 static void stop(int) {
@@ -80,6 +68,8 @@ static void stop(int) {
   if (DEBUG)
     std::cout << "Writing output.\n";
 
+  if (DUMP_TO_FILE)
+    dump_to_output();
   release_memory();
   exit(0);
 }
@@ -106,11 +96,14 @@ int main(int argc, char **argv) {
     nodes.push_back(node);
   }
 
+  output_path = parser.outputPath();
   std::ifstream configFile(parser.configPath());
   size_t receiver_id;
 
   configFile >> msgs_to_send_count;
   configFile >> receiver_id;
+
+  configFile.close();
 
   delivered = new bool[msgs_to_send_count]{false};
 
@@ -122,7 +115,7 @@ int main(int argc, char **argv) {
   node_t myself_node = nodes[get_node_idx_by_id(nodes, parser.id())];
 
   bool should_send_messages = receiver_id != parser.id();
-  bool is_receiver = !should_send_messages;
+  is_receiver = !should_send_messages;
   bool was_sent;
 
   int sockfd = bind_socket(myself_node.port);
@@ -148,9 +141,10 @@ int main(int argc, char **argv) {
       send_messages(sockfd, msgs_to_send_count, delivered, &receiver_node,
                     &myself_node, &first_undelivered);
 
-      if (DEBUG && all_delivered()) {
+      if (!KEEP_ALIVE && all_delivered()) {
         finito = true;
-        std::cout << "\n\nAll done, no more messages to send! :)\n\n";
+        if (DEBUG)
+          std::cout << "\n\nAll done, no more messages to send! :)\n\n";
         break;
       }
     }
@@ -158,6 +152,6 @@ int main(int argc, char **argv) {
 
   receiver_thread.join();
 
-  release_memory();
+  stop(0);
   return 0;
 }

@@ -4,9 +4,9 @@
 #include "common.hpp"
 #include "udp.hpp"
 
-void send_messages(int sockfd, uint64_t msgs_to_send_count, bool *delivered,
+void send_messages(int sockfd, uint32_t msgs_to_send_count, bool *delivered,
                    node_t *receiver_node, node_t *sender_node,
-                   uint64_t *first_undelivered);
+                   uint32_t *first_undelivered);
 
 void receive_message(int sockfd, bool *delivered, bool is_receiver,
                      std::vector<node_t> &nodes);

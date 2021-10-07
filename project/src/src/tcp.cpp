@@ -9,15 +9,15 @@
 #define MAX_PACKET_WAIT_MS 100
 #define SENDING_CHUNK_SIZE 100000
 
-void send_messages(int sockfd, uint64_t msgs_to_send_count, bool *delivered,
+void send_messages(int sockfd, uint32_t msgs_to_send_count, bool *delivered,
                    node_t *receiver_node, node_t *sender_node,
-                   uint64_t *first_undelivered) {
+                   uint32_t *first_undelivered) {
   payload_t payload;
   bool was_sent;
   bool all_delivered_so_far = true;
   int sent_messages = 0;
 
-  for (uint64_t i = *first_undelivered; i < msgs_to_send_count; i++) {
+  for (uint32_t i = *first_undelivered; i < msgs_to_send_count; i++) {
     if (delivered[i])
       continue;
     else if (all_delivered_so_far) {
@@ -46,12 +46,11 @@ void receive_message(int sockfd, bool *delivered, bool is_receiver,
     receive_udp_payload(sockfd, &payload);
     node_t sender_node = nodes[get_node_idx_by_id(nodes, payload.sender_id)];
 
+    delivered[payload.packet_uid] = true;
+
     if (is_receiver) {
       // Sending back ACK
       was_sent = send_udp_payload(sockfd, &sender_node, &payload);
-    } else {
-      // Received ACK
-      delivered[payload.packet_uid] = true;
     }
   }
 }
