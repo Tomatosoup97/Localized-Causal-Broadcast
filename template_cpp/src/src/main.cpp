@@ -22,8 +22,9 @@ const char *output_path;
 bool is_receiver;
 
 static bool all_delivered() {
-  // TODO
-  return false;
+  return enqueued_messages >= (msgs_to_send_count - 1) &&
+         tcp_handler.sending_queue->size() == 0 &&
+         tcp_handler.retrans_queue->size() == 0;
 }
 
 static void release_memory() {
@@ -145,11 +146,15 @@ int main(int argc, char **argv) {
   // Spawn thread for retransmitting messages
   std::thread retransmiter_thread(keep_retransmitting_messages, &tcp_handler);
 
-  /* if (!KEEP_ALIVE && all_delivered()) { */
-  /*   finito = true; */
-  /*   if (DEBUG) */
-  /*     std::cout << "\n\nAll done, no more messages to send! :)\n\n"; */
-  /* } */
+  if (!KEEP_ALIVE) {
+    while (!all_delivered()) {
+      std::this_thread::sleep_for(200ms);
+    }
+    finito = true;
+    if (DEBUG)
+      std::cout << "\nAll done, no more messages to send! :)\n";
+    stop(0);
+  }
 
   receiver_thread.join();
   sender_thread.join();
