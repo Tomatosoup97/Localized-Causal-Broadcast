@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <sys/types.h>
@@ -10,79 +11,113 @@
 
 #define MAX_PACKET_WAIT_MS 100
 #define SENDING_CHUNK_SIZE 1000000
-#define RETRANSMISSION_OFFSET_MS 150
+#define RETRANSMISSION_OFFSET_MS 100
 
-void send_messages(int sockfd, uint32_t msgs_to_send_count, bool *delivered,
-                   node_t *receiver_node, node_t *sender_node,
-                   uint32_t *first_undelivered) {
-  payload_t payload;
-  bool was_sent;
-  bool all_delivered_so_far = true;
-  int sent_messages = 0;
+using namespace std::chrono;
 
-  for (uint32_t i = *first_undelivered; i < msgs_to_send_count; i++) {
-    if (delivered[i])
-      continue;
-    else if (all_delivered_so_far) {
-      all_delivered_so_far = false;
-      *first_undelivered = i;
-    } else if (sent_messages > SENDING_CHUNK_SIZE) {
-      break;
-    }
-
-    sent_messages++;
-
-    payload = {i, i, sender_node->id};
-    was_sent = send_udp_payload(sockfd, receiver_node, &payload);
-  }
-  if (all_delivered_so_far)
-    *first_undelivered = msgs_to_send_count - 1;
-}
-
-void receive_message(int sockfd, bool *delivered, bool is_receiver,
+void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
                      std::vector<node_t> &nodes) {
   int is_socket_ready;
   bool was_sent;
-  payload_t payload;
 
-  while ((is_socket_ready = select_socket(sockfd, 0, MAX_PACKET_WAIT_MS))) {
-    receive_udp_payload(sockfd, &payload);
-    node_t sender_node = nodes[get_node_idx_by_id(nodes, payload.sender_id)];
-
-    delivered[payload.packet_uid] = true;
+  while ((is_socket_ready =
+              select_socket(tcp_handler->sockfd, 0, MAX_PACKET_WAIT_MS))) {
+    payload_t *payload = new payload_t;
+    receive_udp_payload(tcp_handler->sockfd, payload);
+    node_t sender_node = nodes[get_node_idx_by_id(nodes, payload->sender_id)];
 
     if (is_receiver) {
-      // Sending back ACK
-      was_sent = send_udp_payload(sockfd, &sender_node, &payload);
+      // Send back ACK
+      was_sent = send_udp_payload(tcp_handler->sockfd, &sender_node, payload);
+
+      // If first seen -> add to received queue
+      if (!tcp_handler->delivered->contains(payload->packet_uid)) {
+        tcp_handler->received_queue->enqueue(payload);
+      }
+    }
+
+    // Mark the message as delivered
+    tcp_handler->delivered->insert(payload->packet_uid);
+  }
+}
+
+void keep_receiving_messages(tcp_handler_t *tcp_handler, bool is_receiver,
+                             std::vector<node_t> &nodes) {
+
+  while (!*tcp_handler->finito)
+    receive_message(tcp_handler, is_receiver, nodes);
+}
+
+void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
+                                      std::vector<node_t> &nodes,
+                                      node_t *receiver_node) {
+  bool was_sent;
+  retrans_unit_t retrans_unit;
+  steady_clock::time_point sending_time;
+
+  while (!*tcp_handler->finito) {
+    payload_t *payload = tcp_handler->sending_queue->dequeue();
+
+    std::cout << "Dequeued ";
+    show_payload(payload);
+
+    was_sent = send_udp_payload(tcp_handler->sockfd, receiver_node, payload);
+
+    sending_time = steady_clock::now();
+    retrans_unit = {payload, sending_time};
+    tcp_handler->retrans_queue->enqueue(&retrans_unit);
+  }
+}
+
+void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
+  if (tcp_handler->is_receiver) {
+    return;
+  }
+
+  while (!*tcp_handler->finito) {
+    retrans_unit_t *retrans_unit = tcp_handler->retrans_queue->dequeue();
+    uint32_t packet_uid = retrans_unit->payload->packet_uid;
+
+    if (tcp_handler->delivered->contains(packet_uid)) {
+      // already delivered - no need to retransmit
+      continue;
+    }
+
+    while (!should_start_retransmission(retrans_unit->sending_time)) {
+      // spin until we can retransmit again
+    }
+    tcp_handler->sending_queue->enqueue(retrans_unit->payload);
+  }
+}
+
+void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
+                             uint32_t *enqueued_messages,
+                             uint32_t msgs_to_send_count) {
+  if (tcp_handler->is_receiver) {
+    return;
+  }
+
+  while (*enqueued_messages < msgs_to_send_count) {
+    if (tcp_handler->sending_queue->size() < SENDING_CHUNK_SIZE) {
+
+      uint32_t enqueue_until =
+          std::min(*enqueued_messages + SENDING_CHUNK_SIZE, msgs_to_send_count);
+
+      while (*enqueued_messages < enqueue_until) {
+        payload_t *payload = new payload_t;
+        *payload = {*enqueued_messages, *enqueued_messages, sender_node->id};
+
+        show_payload(payload);
+        tcp_handler->sending_queue->enqueue(payload);
+        (*enqueued_messages)++;
+      }
     }
   }
 }
 
-void keep_receiving_messages(int sockfd, bool *delivered, bool is_receiver,
-                             std::vector<node_t> &nodes, bool *finito) {
-
-  while (!*finito)
-    receive_message(sockfd, delivered, is_receiver, nodes);
-}
-
-void keep_sending_messages_from_queue(int sockfd,
-                                      SafeQueue<payload_t *> &messages_queue,
-                                      std::vector<node_t> &nodes,
-                                      bool *finito) {
-  bool was_sent;
-
-  while (!*finito) {
-    payload_t *payload = messages_queue.dequeue();
-    node_t sender_node = nodes[get_node_idx_by_id(nodes, payload->sender_id)];
-    was_sent = send_udp_payload(sockfd, &sender_node, payload);
-  }
-}
-
-bool should_start_retransmission(
-    std::chrono::steady_clock::time_point sending_start) {
-  std::chrono::steady_clock::time_point current_time = std::chrono::steady_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-      current_time - sending_start);
+bool should_start_retransmission(steady_clock::time_point sending_start) {
+  time_point current_time = steady_clock::now();
+  auto duration = duration_cast<microseconds>(current_time - sending_start);
   int64_t ms_since_last_sending = duration.count() / 1000;
   return ms_since_last_sending > RETRANSMISSION_OFFSET_MS;
 }

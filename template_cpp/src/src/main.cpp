@@ -5,29 +5,29 @@
 #include <thread>
 
 #include "common.hpp"
+#include "delivered_set.hpp"
 #include "parser.hpp"
 #include "tcp.hpp"
 #include "udp.hpp"
 #include <signal.h>
 
-bool *delivered;
-uint32_t first_undelivered = 0;
 uint32_t msgs_to_send_count;
+uint32_t enqueued_messages;
 bool finito = false;
+
+tcp_handler_t tcp_handler;
 
 const char *output_path;
 bool is_receiver;
 
 static bool all_delivered() {
-  return first_undelivered == (msgs_to_send_count - 1) &&
-         delivered[first_undelivered];
+  // TODO
+  return false;
 }
 
 static void release_memory() {
   if (DEBUG)
     std::cout << "Cleaning up memory...\n";
-
-  delete[] delivered;
 }
 
 static void dump_to_output() {
@@ -36,17 +36,16 @@ static void dump_to_output() {
 
   std::ofstream output_file(output_path);
 
-  for (uint32_t i = 0; i < msgs_to_send_count; i++) {
-    if (!delivered[i]) {
-      continue;
+  if (is_receiver) {
+    while (tcp_handler.received_queue->size() > 0) {
+      payload_t *payload = tcp_handler.received_queue->dequeue();
+      output_file << "d " << payload->sender_id << " " << payload->message
+                  << "\n";
     }
+  } else {
 
-    // TODO: log actual sender_id
-    if (is_receiver) {
-      output_file << "d "
-                  << "1"
-                  << " " << i << "\n";
-    } else {
+    for (uint32_t i : tcp_handler.delivered->get_set()) {
+
       output_file << "b " << i << "\n";
     }
   }
@@ -104,8 +103,6 @@ int main(int argc, char **argv) {
 
   configFile.close();
 
-  delivered = new bool[msgs_to_send_count]{false};
-
   payload_t payload;
   ssize_t message_len;
   uint8_t buffer[IP_MAXPACKET];
@@ -119,30 +116,46 @@ int main(int argc, char **argv) {
 
   int sockfd = bind_socket(myself_node.port);
 
-  std::chrono::steady_clock::time_point sending_start;
+  SafeQueue<payload_t *> sending_queue;
+  SafeQueue<payload_t *> received_queue;
+  SafeQueue<retrans_unit_t *> retrans_queue;
+  DeliveredSet delivered;
+
+  tcp_handler.sockfd = sockfd;
+  tcp_handler.finito = &finito;
+  tcp_handler.is_receiver = is_receiver;
+
+  tcp_handler.sending_queue = &sending_queue;
+  tcp_handler.received_queue = &received_queue;
+  tcp_handler.retrans_queue = &retrans_queue;
+  tcp_handler.delivered = &delivered;
 
   // Spawn thread for receiving messages
-  std::thread receiver_thread(keep_receiving_messages, sockfd, delivered,
-                              is_receiver, std::ref(nodes), &finito);
+  std::thread receiver_thread(keep_receiving_messages, &tcp_handler,
+                              is_receiver, std::ref(nodes));
 
-  while (should_send_messages) {
-    if (should_start_retransmission(sending_start)) {
+  // Spawn thread for sending messages
+  std::thread sender_thread(keep_sending_messages_from_queue, &tcp_handler,
+                            std::ref(nodes), &receiver_node);
 
-      sending_start = std::chrono::steady_clock::now();
+  // Spawn thread for enqueuing messages
+  std::thread enqueuer_thread(keep_enqueuing_messages, &tcp_handler,
+                              &myself_node, &enqueued_messages,
+                              msgs_to_send_count);
 
-      send_messages(sockfd, msgs_to_send_count, delivered, &receiver_node,
-                    &myself_node, &first_undelivered);
+  // Spawn thread for retransmitting messages
+  std::thread retransmiter_thread(keep_retransmitting_messages, &tcp_handler);
 
-      if (!KEEP_ALIVE && all_delivered()) {
-        finito = true;
-        if (DEBUG)
-          std::cout << "\n\nAll done, no more messages to send! :)\n\n";
-        break;
-      }
-    }
-  }
+  /* if (!KEEP_ALIVE && all_delivered()) { */
+  /*   finito = true; */
+  /*   if (DEBUG) */
+  /*     std::cout << "\n\nAll done, no more messages to send! :)\n\n"; */
+  /* } */
 
   receiver_thread.join();
+  sender_thread.join();
+  enqueuer_thread.join();
+  retransmiter_thread.join();
 
   stop(0);
   return 0;

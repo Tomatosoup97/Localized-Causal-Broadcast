@@ -11,9 +11,9 @@
 #include <sys/types.h>
 
 // Program flags
-#define DEBUG 0
+#define DEBUG 1
 #define KEEP_ALIVE 0
-#define DUMP_TO_FILE 0
+#define DUMP_TO_FILE 1
 
 #define IP_MAXPACKET 65535
 
@@ -22,8 +22,6 @@ typedef struct {
 } ip_addr_v;
 
 typedef struct in_addr ip_addr_t;
-
-// TODO: asses if we really need uint32_t instead of uint32_t
 
 typedef struct {
   uint32_t message;
