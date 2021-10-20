@@ -30,6 +30,8 @@ void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
 void keep_receiving_messages(tcp_handler_t *tcp_handler, bool is_receiver,
                              std::vector<node_t> &nodes);
 
+void put_to_retransmission(tcp_handler_t *tcp_handler, payload_t *payload);
+
 void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
                                       std::vector<node_t> &nodes,
                                       node_t *receiver_node);

@@ -12,8 +12,9 @@
 #include <signal.h>
 
 uint32_t msgs_to_send_count;
-uint32_t enqueued_messages;
+uint32_t enqueued_messages = 0;
 bool finito = false;
+node_t myself_node;
 
 tcp_handler_t tcp_handler;
 
@@ -43,9 +44,7 @@ static void dump_to_output() {
                   << "\n";
     }
   } else {
-
-    for (uint32_t i : tcp_handler.delivered->get_set()) {
-
+    for (auto i : tcp_handler.delivered->get_set(myself_node.id)) {
       output_file << "b " << i << "\n";
     }
   }
@@ -108,7 +107,7 @@ int main(int argc, char **argv) {
   uint8_t buffer[IP_MAXPACKET];
 
   node_t receiver_node = nodes[get_node_idx_by_id(nodes, receiver_id)];
-  node_t myself_node = nodes[get_node_idx_by_id(nodes, parser.id())];
+  myself_node = nodes[get_node_idx_by_id(nodes, parser.id())];
 
   bool should_send_messages = receiver_id != parser.id();
   is_receiver = !should_send_messages;
@@ -119,7 +118,7 @@ int main(int argc, char **argv) {
   SafeQueue<payload_t *> sending_queue;
   SafeQueue<payload_t *> received_queue;
   SafeQueue<retrans_unit_t *> retrans_queue;
-  DeliveredSet delivered;
+  DeliveredSet delivered = DeliveredSet(nodes.size());
 
   tcp_handler.sockfd = sockfd;
   tcp_handler.finito = &finito;
