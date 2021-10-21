@@ -10,7 +10,7 @@
 #include "udp.hpp"
 
 #define MAX_PACKET_WAIT_MS 100
-#define SENDING_CHUNK_SIZE 1000000
+#define SENDING_CHUNK_SIZE 100000
 #define RETRANSMISSION_OFFSET_MS 100
 
 using namespace std::chrono;
@@ -26,15 +26,16 @@ void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
     receive_udp_payload(tcp_handler->sockfd, payload);
     node_t sender_node = nodes[get_node_idx_by_id(nodes, payload->sender_id)];
 
+    // TODO: consider doing all below as a separate thread
     if (is_receiver) {
       // Send back ACK
       was_sent = send_udp_payload(tcp_handler->sockfd, &sender_node, payload);
+    }
 
-      // If first seen -> add to received queue
-      if (!tcp_handler->delivered->contains(payload->sender_id,
-                                            payload->packet_uid)) {
-        tcp_handler->received_queue->enqueue(payload);
-      }
+    // If first seen -> add to received queue
+    if (!tcp_handler->delivered->contains(payload->sender_id,
+                                          payload->packet_uid)) {
+      tcp_handler->received_queue->enqueue(payload);
     }
 
     // Mark the message as delivered

@@ -38,15 +38,14 @@ static void dump_to_output() {
 
   std::ofstream output_file(output_path);
 
-  if (is_receiver) {
-    while (tcp_handler.received_queue->size() > 0) {
-      payload_t *payload = tcp_handler.received_queue->dequeue();
+  while (tcp_handler.received_queue->size() > 0) {
+    payload_t *payload = tcp_handler.received_queue->dequeue();
+
+    if (is_receiver) {
       output_file << "d " << payload->sender_id << " " << payload->message
                   << "\n";
-    }
-  } else {
-    for (auto i : tcp_handler.delivered->get_set(myself_node.id)) {
-      output_file << "b " << i << "\n";
+    } else {
+      output_file << "b " << payload->message << "\n";
     }
   }
 
