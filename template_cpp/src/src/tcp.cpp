@@ -26,9 +26,15 @@ void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
     receive_udp_payload(tcp_handler->sockfd, payload);
     node_t sender_node = nodes[get_node_idx_by_id(nodes, payload->sender_id)];
 
-    // TODO: consider doing all below as a separate thread
     if (is_receiver) {
       // Send back ACK
+      /* message_t *message = new message_t; */
+      /* message->payload = payload; */
+      /* message->recipient = &sender_node; */
+      /* message->is_ack = true; */
+
+      /* tcp_handler->sending_queue->enqueue(message); */
+
       was_sent = send_udp_payload(tcp_handler->sockfd, &sender_node, payload);
     }
 
@@ -50,27 +56,24 @@ void keep_receiving_messages(tcp_handler_t *tcp_handler, bool is_receiver,
     receive_message(tcp_handler, is_receiver, nodes);
 }
 
-void put_to_retransmission(tcp_handler_t *tcp_handler, payload_t *payload) {
-  steady_clock::time_point sending_time = steady_clock::now();
-  retrans_unit_t *retrans_unit = new retrans_unit_t;
-  *retrans_unit = {payload, sending_time};
-  tcp_handler->retrans_queue->enqueue(retrans_unit);
-}
-
 void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
-                                      std::vector<node_t> &nodes,
-                                      node_t *receiver_node) {
+                                      std::vector<node_t> &nodes) {
   bool was_sent;
 
-  if (tcp_handler->is_receiver) {
-    return;
-  }
-
   while (!*tcp_handler->finito) {
-    payload_t *payload = tcp_handler->sending_queue->dequeue();
-    was_sent = send_udp_payload(tcp_handler->sockfd, receiver_node, payload);
 
-    put_to_retransmission(tcp_handler, payload);
+    message_t *message = tcp_handler->sending_queue->dequeue();
+    was_sent = send_udp_payload(tcp_handler->sockfd, message->recipient,
+                                message->payload);
+
+    if (message->is_ack) {
+      // We no longer need it after ACK was sent
+      delete message;
+    } else {
+      // Retransmitting
+      message->sending_time = steady_clock::now();
+      tcp_handler->retrans_queue->enqueue(message);
+    }
   }
 }
 
@@ -80,35 +83,35 @@ void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
   }
 
   while (!*tcp_handler->finito) {
-    retrans_unit_t *retrans_unit = tcp_handler->retrans_queue->dequeue();
-    uint32_t packet_uid = retrans_unit->payload->packet_uid;
+    message_t *message = tcp_handler->retrans_queue->dequeue();
+    uint32_t packet_uid = message->payload->packet_uid;
 
-    if (tcp_handler->delivered->contains(retrans_unit->payload->sender_id,
+    if (tcp_handler->delivered->contains(message->payload->sender_id,
                                          packet_uid)) {
       // already delivered - no need to retransmit, we can free memory
-      delete retrans_unit->payload;
+      delete message->payload;
+      delete message;
       continue;
     }
 
     if (DEBUG) {
       std::cout << "Retransmitting: ";
-      show_payload(retrans_unit->payload);
+      show_payload(message->payload);
     }
 
-    while (!should_start_retransmission(retrans_unit->sending_time)) {
+    while (!should_start_retransmission(message->sending_time)) {
       // spin until we can retransmit again
     }
 
-    tcp_handler->sending_queue->enqueue(retrans_unit->payload);
-    // TODO: we allocate it once again if needed (can be improved)
-    delete retrans_unit;
+    tcp_handler->sending_queue->enqueue(message);
   }
 }
 
 void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
-                             uint32_t *enqueued_messages,
+                             node_t *receiver_node, uint32_t *enqueued_messages,
                              uint32_t msgs_to_send_count) {
   payload_t *payload;
+  message_t *message;
 
   if (tcp_handler->is_receiver) {
     return;
@@ -122,10 +125,14 @@ void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
 
       while (*enqueued_messages < enqueue_until) {
         payload = new payload_t;
+        message = new message_t;
+
         uint32_t nr = (*enqueued_messages) + 1;
         *payload = {nr, nr, sender_node->id};
+        message->payload = payload;
+        message->recipient = receiver_node;
 
-        tcp_handler->sending_queue->enqueue(payload);
+        tcp_handler->sending_queue->enqueue(message);
         (*enqueued_messages)++;
       }
     }

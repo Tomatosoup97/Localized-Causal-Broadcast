@@ -11,17 +11,21 @@ using namespace std::chrono;
 
 typedef struct {
   payload_t *payload;
+  node_t *recipient;
   steady_clock::time_point sending_time;
-} retrans_unit_t;
+  bool is_ack = false;
+} message_t;
+
+typedef SafeQueue<message_t *> MessagesQueue;
 
 typedef struct {
   int sockfd;
   bool is_receiver;
   bool *finito;
   DeliveredSet *delivered;
-  SafeQueue<payload_t *> *sending_queue;
+  MessagesQueue *sending_queue;
+  MessagesQueue *retrans_queue;
   SafeQueue<payload_t *> *received_queue;
-  SafeQueue<retrans_unit_t *> *retrans_queue;
 } tcp_handler_t;
 
 void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
@@ -30,16 +34,13 @@ void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
 void keep_receiving_messages(tcp_handler_t *tcp_handler, bool is_receiver,
                              std::vector<node_t> &nodes);
 
-void put_to_retransmission(tcp_handler_t *tcp_handler, payload_t *payload);
-
 void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
-                                      std::vector<node_t> &nodes,
-                                      node_t *receiver_node);
+                                      std::vector<node_t> &nodes);
 
 void keep_retransmitting_messages(tcp_handler_t *tcp_handler);
 
 void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
-                             uint32_t *enqueued_messages,
+                             node_t *receiver_node, uint32_t *enqueued_messages,
                              uint32_t msgs_to_send_count);
 
 bool should_start_retransmission(steady_clock::time_point sending_start);

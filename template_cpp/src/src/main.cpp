@@ -127,9 +127,9 @@ int main(int argc, char **argv) {
 
   int sockfd = bind_socket(myself_node.port);
 
-  SafeQueue<payload_t *> sending_queue;
+  MessagesQueue sending_queue;
+  MessagesQueue retrans_queue;
   SafeQueue<payload_t *> received_queue;
-  SafeQueue<retrans_unit_t *> retrans_queue;
   DeliveredSet delivered = DeliveredSet(nodes.size());
 
   tcp_handler.sockfd = sockfd;
@@ -137,8 +137,8 @@ int main(int argc, char **argv) {
   tcp_handler.is_receiver = is_receiver;
 
   tcp_handler.sending_queue = &sending_queue;
-  tcp_handler.received_queue = &received_queue;
   tcp_handler.retrans_queue = &retrans_queue;
+  tcp_handler.received_queue = &received_queue;
   tcp_handler.delivered = &delivered;
 
   // Spawn thread for receiving messages
@@ -147,11 +147,11 @@ int main(int argc, char **argv) {
 
   // Spawn thread for sending messages
   std::thread sender_thread(keep_sending_messages_from_queue, &tcp_handler,
-                            std::ref(nodes), &receiver_node);
+                            std::ref(nodes));
 
   // Spawn thread for enqueuing messages
   std::thread enqueuer_thread(keep_enqueuing_messages, &tcp_handler,
-                              &myself_node, &enqueued_messages,
+                              &myself_node, &receiver_node, &enqueued_messages,
                               msgs_to_send_count);
 
   // Spawn thread for retransmitting messages
