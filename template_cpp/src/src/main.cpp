@@ -47,6 +47,7 @@ static void dump_to_output() {
     } else {
       output_file << "b " << payload->message << "\n";
     }
+    delete payload;
   }
 
   output_file.close();

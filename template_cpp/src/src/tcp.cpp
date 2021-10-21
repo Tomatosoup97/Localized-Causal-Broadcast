@@ -81,7 +81,8 @@ void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
 
     if (tcp_handler->delivered->contains(retrans_unit->payload->sender_id,
                                          packet_uid)) {
-      // already delivered - no need to retransmit
+      // already delivered - no need to retransmit, we can free memory
+      delete retrans_unit->payload;
       continue;
     }
 
@@ -95,6 +96,8 @@ void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
     }
 
     tcp_handler->sending_queue->enqueue(retrans_unit->payload);
+    // TODO: we allocate it once again if needed (can be improved)
+    delete retrans_unit;
   }
 }
 
