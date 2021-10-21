@@ -25,7 +25,7 @@ public:
   DeliveredSet(size_t keys_in) : s(), mtx() {
     keys = static_cast<uint32_t>(keys_in);
 
-    for (uint32_t i = 0; i < keys; i++) {
+    for (uint32_t i = 0; i <= keys; i++) {
       // initialize delivered sets
       std::unordered_set<uint32_t> *messages = new std::unordered_set<uint32_t>;
       s[i] = messages;
@@ -36,7 +36,7 @@ public:
   }
 
   ~DeliveredSet() {
-    for (uint32_t i = 0; i < keys; i++) {
+    for (uint32_t i = 0; i <= keys; i++) {
       delete s[i];
     }
   }

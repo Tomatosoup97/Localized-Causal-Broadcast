@@ -14,6 +14,7 @@ typedef struct {
   node_t *recipient;
   steady_clock::time_point sending_time;
   bool is_ack = false;
+  bool first_send = true;
 } message_t;
 
 typedef SafeQueue<message_t *> MessagesQueue;

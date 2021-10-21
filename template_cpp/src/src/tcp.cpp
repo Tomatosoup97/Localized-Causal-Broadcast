@@ -28,21 +28,13 @@ void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
 
     if (is_receiver) {
       // Send back ACK
-      // This enqueue method is 2x slower + leaks memory
-      /* message_t *message = new message_t; */
-      /* message->payload = payload; */
-      /* message->recipient = &sender_node; */
-      /* message->is_ack = true; */
-
-      /* tcp_handler->sending_queue->enqueue(message); */
-
       was_sent = send_udp_payload(tcp_handler->sockfd, &sender_node, payload);
-    }
 
-    // If first seen -> add to received queue
-    if (!tcp_handler->delivered->contains(payload->sender_id,
-                                          payload->packet_uid)) {
-      tcp_handler->received_queue->enqueue(payload);
+      // If first seen -> add to received queue
+      if (!tcp_handler->delivered->contains(payload->sender_id,
+                                            payload->packet_uid)) {
+        tcp_handler->received_queue->enqueue(payload);
+      }
     }
 
     // Mark the message as delivered
@@ -71,8 +63,14 @@ void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
       // We no longer need it after ACK was sent
       delete message;
     } else {
+      if (message->first_send) {
+        payload_t *payload = new payload_t;
+        *payload = *message->payload;
+        tcp_handler->received_queue->enqueue(payload);
+      }
       // Retransmitting
       message->sending_time = steady_clock::now();
+      message->first_send = false;
       tcp_handler->retrans_queue->enqueue(message);
     }
   }
@@ -132,6 +130,7 @@ void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
         *payload = {nr, nr, sender_node->id};
         message->payload = payload;
         message->recipient = receiver_node;
+        message->first_send = true;
 
         tcp_handler->sending_queue->enqueue(message);
         (*enqueued_messages)++;
