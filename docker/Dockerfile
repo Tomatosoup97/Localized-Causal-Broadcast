@@ -14,6 +14,8 @@ RUN apt-get -y install file unzip zip xz-utils git \
                          gcc g++ cmake default-jdk \
                          python3
 
+RUN apt-get -y install tmux
+
 ARG user=app
 ARG group=app
 ARG uid=1000
