@@ -17,6 +17,7 @@ typedef struct {
 } message_t;
 
 typedef SafeQueue<message_t *> MessagesQueue;
+typedef SafeQueue<payload_t *> PayloadQueue;
 
 typedef struct {
   int sockfd;
@@ -25,7 +26,7 @@ typedef struct {
   DeliveredSet *delivered;
   MessagesQueue *sending_queue;
   MessagesQueue *retrans_queue;
-  SafeQueue<payload_t *> *received_queue;
+  PayloadQueue *received_queue;
 } tcp_handler_t;
 
 void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,

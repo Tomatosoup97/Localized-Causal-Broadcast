@@ -28,6 +28,7 @@ void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
 
     if (is_receiver) {
       // Send back ACK
+      // This enqueue method is 2x slower + leaks memory
       /* message_t *message = new message_t; */
       /* message->payload = payload; */
       /* message->recipient = &sender_node; */

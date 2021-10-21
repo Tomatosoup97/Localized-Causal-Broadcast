@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
 
   MessagesQueue sending_queue;
   MessagesQueue retrans_queue;
-  SafeQueue<payload_t *> received_queue;
+  PayloadQueue received_queue;
   DeliveredSet delivered = DeliveredSet(nodes.size());
 
   tcp_handler.sockfd = sockfd;
