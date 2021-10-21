@@ -25,7 +25,7 @@ const char *output_path;
 bool is_receiver;
 
 static bool all_delivered() {
-  return enqueued_messages >= (msgs_to_send_count - 1) &&
+  return enqueued_messages >= msgs_to_send_count &&
          tcp_handler.sending_queue->size() == 0 &&
          tcp_handler.retrans_queue->size() == 0;
 }
