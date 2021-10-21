@@ -11,6 +11,9 @@
 #include "udp.hpp"
 #include <signal.h>
 
+#define DUMP_WHEN_ABOVE (MILLION / 2)
+#define DUMPING_CHUNK (MILLION / 10)
+
 uint32_t msgs_to_send_count;
 uint32_t enqueued_messages = 0;
 bool finito = false;
@@ -32,13 +35,13 @@ static void release_memory() {
     std::cout << "Cleaning up memory...\n";
 }
 
-static void dump_to_output() {
+static void dump_to_output(uint32_t until_size = 0) {
   if (DEBUG)
     std::cout << "Dumping to file...\n";
 
-  std::ofstream output_file(output_path);
+  std::ofstream output_file(output_path, std::ios_base::app);
 
-  while (tcp_handler.received_queue->size() > 0) {
+  while (tcp_handler.received_queue->size() > until_size) {
     payload_t *payload = tcp_handler.received_queue->dequeue();
 
     if (is_receiver) {
@@ -53,18 +56,20 @@ static void dump_to_output() {
   output_file.close();
 }
 
+static void keep_dumping_to_output() {
+  while (!*tcp_handler.finito) {
+    uint32_t current_size = tcp_handler.received_queue->size();
+
+    if (current_size > DUMP_WHEN_ABOVE) {
+      dump_to_output(current_size - DUMPING_CHUNK);
+    }
+  }
+}
+
 static void stop(int) {
   // reset signal handlers to default
   signal(SIGTERM, SIG_DFL);
   signal(SIGINT, SIG_DFL);
-
-  // immediately stop network packet processing
-  if (DEBUG)
-    std::cout << "Immediately stopping network packet processing.\n";
-
-  // write/flush output file if necessary
-  if (DEBUG)
-    std::cout << "Writing output.\n";
 
   if (DUMP_TO_FILE)
     dump_to_output();
@@ -95,6 +100,12 @@ int main(int argc, char **argv) {
   }
 
   output_path = parser.outputPath();
+
+  // clean output file
+  std::ofstream output_file;
+  output_file.open(output_path, std::ofstream::out | std::ofstream::trunc);
+  output_file.close();
+
   std::ifstream configFile(parser.configPath());
   size_t receiver_id;
 
@@ -146,6 +157,9 @@ int main(int argc, char **argv) {
   // Spawn thread for retransmitting messages
   std::thread retransmiter_thread(keep_retransmitting_messages, &tcp_handler);
 
+  // Spawn thread for dumping messages
+  std::thread writer_thread(keep_dumping_to_output);
+
   if (!KEEP_ALIVE) {
     while (!all_delivered()) {
       std::this_thread::sleep_for(200ms);
@@ -160,6 +174,7 @@ int main(int argc, char **argv) {
   sender_thread.join();
   enqueuer_thread.join();
   retransmiter_thread.join();
+  writer_thread.join();
 
   stop(0);
   return 0;

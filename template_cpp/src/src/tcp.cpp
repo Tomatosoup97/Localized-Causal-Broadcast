@@ -10,7 +10,7 @@
 #include "udp.hpp"
 
 #define MAX_PACKET_WAIT_MS 100
-#define SENDING_CHUNK_SIZE 100000
+#define SENDING_CHUNK_SIZE (MILLION / 10)
 #define RETRANSMISSION_OFFSET_MS 100
 
 using namespace std::chrono;
@@ -61,6 +61,10 @@ void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
                                       std::vector<node_t> &nodes,
                                       node_t *receiver_node) {
   bool was_sent;
+
+  if (tcp_handler->is_receiver) {
+    return;
+  }
 
   while (!*tcp_handler->finito) {
     payload_t *payload = tcp_handler->sending_queue->dequeue();
