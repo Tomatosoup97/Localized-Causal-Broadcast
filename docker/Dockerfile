@@ -14,7 +14,7 @@ RUN apt-get -y install file unzip zip xz-utils git \
                          gcc g++ cmake default-jdk \
                          python3
 
-RUN apt-get -y install tmux
+RUN apt-get -y install tmux sudo iproute2
 
 ARG user=app
 ARG group=app
@@ -29,8 +29,10 @@ RUN addgroup --gid ${gid} ${group} && \
                 --shell /bin/bash \
                 ${user}
 
-
-RUN mkdir -p /app && chown -R ${user}:${user} /app
+RUN adduser app sudo && \
+    echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
+    mkdir -p /app && \
+    chown -R ${user}:${user} /app
 
 USER ${user}
 
