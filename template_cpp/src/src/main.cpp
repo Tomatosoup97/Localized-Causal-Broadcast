@@ -48,11 +48,13 @@ static void dump_to_output(uint32_t until_size = 0) {
     payload_t *payload = tcp_handler.received_queue->dequeue();
 
     if (is_receiver) {
-      output_file << "d " << payload->sender_id << " " << payload->message
-                  << "\n";
+      output_file << "d " << payload->sender_id << " "
+                  << buff_as_str(payload->buffer, payload->buff_size) << "\n";
     } else {
-      output_file << "b " << payload->message << "\n";
+      output_file << "b " << buff_as_str(payload->buffer, payload->buff_size)
+                  << "\n";
     }
+    delete payload->buffer;
     delete payload;
   }
 
@@ -88,6 +90,9 @@ int main(int argc, char **argv) {
   // Call with `false` if no config file is necessary.
   bool requireConfig = true;
 
+  if (DEBUG)
+    std::cout << "Initializing...\n";
+
   Parser parser(argc, argv);
   parser.parse();
 
@@ -117,10 +122,6 @@ int main(int argc, char **argv) {
 
   configFile.close();
 
-  payload_t payload;
-  ssize_t message_len;
-  uint8_t buffer[IP_MAXPACKET];
-
   node_t receiver_node = nodes[get_node_idx_by_id(nodes, receiver_id)];
   myself_node = nodes[get_node_idx_by_id(nodes, parser.id())];
 
@@ -144,6 +145,8 @@ int main(int argc, char **argv) {
   tcp_handler.received_queue = &received_queue;
   tcp_handler.delivered = &delivered;
 
+  if (DEBUG)
+    std::cout << "Spawning threads...\n";
   // Spawn thread for receiving messages
   std::thread receiver_thread(keep_receiving_messages, &tcp_handler,
                               is_receiver, std::ref(nodes));

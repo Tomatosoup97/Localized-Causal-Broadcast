@@ -45,6 +45,9 @@ void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
                              node_t *receiver_node, uint32_t *enqueued_messages,
                              uint32_t msgs_to_send_count);
 
+void construct_message(message_t *message, node_t *sender, node_t *recipient,
+                       uint32_t seq_num);
+
 bool should_start_retransmission(steady_clock::time_point sending_start);
 
 #endif

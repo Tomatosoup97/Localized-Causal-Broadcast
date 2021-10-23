@@ -19,16 +19,18 @@ void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
                      std::vector<node_t> &nodes) {
   int is_socket_ready;
   bool was_sent;
+  ssize_t buff_size;
 
   while ((is_socket_ready =
               select_socket(tcp_handler->sockfd, 0, MAX_PACKET_WAIT_MS))) {
     payload_t *payload = new payload_t;
-    receive_udp_payload(tcp_handler->sockfd, payload);
+    buff_size = receive_udp_payload(tcp_handler->sockfd, payload);
     node_t sender_node = nodes[get_node_idx_by_id(nodes, payload->sender_id)];
 
     if (is_receiver) {
       // Send back ACK
-      was_sent = send_udp_payload(tcp_handler->sockfd, &sender_node, payload);
+      was_sent = send_udp_payload(tcp_handler->sockfd, &sender_node, payload,
+                                  buff_size);
 
       // If first seen -> add to received queue
       if (!tcp_handler->delivered->contains(payload->sender_id,
@@ -57,16 +59,27 @@ void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
 
     message_t *message = tcp_handler->sending_queue->dequeue();
     was_sent = send_udp_payload(tcp_handler->sockfd, message->recipient,
-                                message->payload);
+                                message->payload, message->payload->buff_size);
 
     if (message->is_ack) {
       // We no longer need it after ACK was sent
+      delete message->payload->buffer;
       delete message->payload;
       delete message;
     } else {
       if (message->first_send) {
         payload_t *payload = new payload_t;
-        *payload = *message->payload;
+        payload->buffer = new char[message->payload->buff_size];
+
+        payload->buff_size = message->payload->buff_size;
+        payload->packet_uid = message->payload->packet_uid;
+        payload->sender_id = message->payload->sender_id;
+        memcpy(payload->buffer, message->payload->buffer, payload->buff_size);
+
+        if (DEBUG) {
+          std::cout << "Pushing to received queue: ";
+          show_payload(payload);
+        }
         tcp_handler->received_queue->enqueue(payload);
       }
       // Retransmitting
@@ -89,6 +102,7 @@ void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
     if (tcp_handler->delivered->contains(message->payload->sender_id,
                                          packet_uid)) {
       // already delivered - no need to retransmit, we can free memory
+      delete message->payload->buffer;
       delete message->payload;
       delete message;
       continue;
@@ -124,19 +138,36 @@ void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
           std::min(*enqueued_messages + SENDING_CHUNK_SIZE, msgs_to_send_count);
 
       while (*enqueued_messages < enqueue_until) {
+        (*enqueued_messages)++;
+
         payload = new payload_t;
         message = new message_t;
-
-        uint32_t nr = (*enqueued_messages) + 1;
-        *payload = {nr, nr, sender_node->id};
         message->payload = payload;
-        message->recipient = receiver_node;
-        message->first_send = true;
+        construct_message(message, sender_node, receiver_node,
+                          *enqueued_messages);
 
         tcp_handler->sending_queue->enqueue(message);
-        (*enqueued_messages)++;
       }
     }
+  }
+}
+
+void construct_message(message_t *message, node_t *sender, node_t *recipient,
+                       uint32_t seq_num) {
+  std::string msg_content = std::to_string(seq_num);
+  message->payload->buffer = new char[msg_content.length()];
+
+  strcpy(message->payload->buffer, msg_content.c_str());
+  message->payload->packet_uid = seq_num;
+  message->payload->sender_id = sender->id;
+  message->payload->buff_size = msg_content.length();
+
+  message->recipient = recipient;
+  message->first_send = true;
+
+  if (DEBUG) {
+    std::cout << "Constructed ";
+    show_payload(message->payload);
   }
 }
 

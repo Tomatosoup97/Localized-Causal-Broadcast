@@ -12,6 +12,11 @@
 #include "common.hpp"
 #include "udp.hpp"
 
+std::string buff_as_str(char *buffer, ssize_t size) {
+  std::string str(buffer, size);
+  return str;
+}
+
 size_t get_node_idx_by_id(std::vector<node_t> &nodes, unsigned long id) {
   for (size_t index = 0; index < nodes.size(); ++index) {
     node_t node = nodes[index];
@@ -22,16 +27,17 @@ size_t get_node_idx_by_id(std::vector<node_t> &nodes, unsigned long id) {
   return -1;
 }
 
-bool send_udp_payload(int sockfd, node_t *receiver, payload_t *payload) {
-  uint8_t buffer[IP_MAXPACKET];
+bool send_udp_payload(int sockfd, node_t *receiver, payload_t *payload,
+                      ssize_t size) {
+  char buffer[IP_MAXPACKET];
   bool was_sent = true;
 
-  encode_udp_payload(payload, buffer);
+  encode_udp_payload(payload, buffer, size);
+  ssize_t payload_size = PAYLOAD_META_SIZE + size;
 
-  ssize_t message_len =
-      send_udp_packet(sockfd, receiver, buffer, sizeof(payload_t));
+  ssize_t message_len = send_udp_packet(sockfd, receiver, buffer, payload_size);
 
-  if (message_len != sizeof(payload_t)) {
+  if (message_len != payload_size) {
     if (errno == ENOTCONN || errno == ENETUNREACH || errno == EHOSTUNREACH)
       was_sent = false;
     else
@@ -48,19 +54,27 @@ bool send_udp_payload(int sockfd, node_t *receiver, payload_t *payload) {
   return was_sent;
 }
 
-void receive_udp_payload(int sockfd, payload_t *payload) {
-  uint8_t buffer[IP_MAXPACKET];
+ssize_t receive_udp_payload(int sockfd, payload_t *payload) {
+  char buffer[IP_MAXPACKET];
 
-  receive_udp_packet(sockfd, buffer, IP_MAXPACKET);
-  decode_udp_payload(payload, buffer);
+  ssize_t datagram_len = receive_udp_packet(sockfd, buffer, IP_MAXPACKET);
+  ssize_t buff_size = datagram_len - PAYLOAD_META_SIZE;
+  if (DEBUG) {
+    std::cout << "Received packet of size " << datagram_len
+              << ", buff size: " << buff_size << "\n";
+  }
+  payload->buffer = new char[buff_size];
+
+  decode_udp_payload(payload, buffer, buff_size);
 
   if (DEBUG) {
     std::cout << "Received ";
     show_payload(payload);
   }
+  return buff_size;
 }
 
-ssize_t send_udp_packet(int sockfd, node_t *receiver, const uint8_t *buffer,
+ssize_t send_udp_packet(int sockfd, node_t *receiver, const char *buffer,
                         ssize_t buff_len) {
   struct sockaddr_in recipent_addr;
   bzero(&recipent_addr, sizeof(recipent_addr));
@@ -73,7 +87,7 @@ ssize_t send_udp_packet(int sockfd, node_t *receiver, const uint8_t *buffer,
                 sizeof(recipent_addr));
 }
 
-void receive_udp_packet(int sockfd, uint8_t *buffer, size_t buff_len) {
+ssize_t receive_udp_packet(int sockfd, char *buffer, ssize_t buff_len) {
   struct sockaddr_in sender;
   socklen_t sender_len = sizeof(sender);
 
@@ -87,36 +101,27 @@ void receive_udp_packet(int sockfd, uint8_t *buffer, size_t buff_len) {
   inet_ntop(AF_INET, &(sender.sin_addr), sender_ip_str, sizeof(sender_ip_str));
 
   fflush(stdout);
+  return datagram_len;
 }
 
-void encode_udp_payload(payload_t *payload, uint8_t *buffer) {
-  memcpy(buffer, &payload->message, 4);
-  memcpy(buffer + 4, &payload->packet_uid, 4);
-  memcpy(buffer + 8, &payload->sender_id, 4);
-}
-
-void decode_udp_payload(payload_t *payload, uint8_t *buffer) {
-  memcpy(&payload->sender_id, buffer + 8, 4);
-  memcpy(&payload->packet_uid, buffer + 4, 4);
-  memcpy(&payload->message, buffer, 4);
-}
-
-/*
-void encode_udp_payload_as_ack_packet(payload_t *payload, uint8_t *buffer) {
+void encode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size) {
   memcpy(buffer, &payload->packet_uid, 4);
   memcpy(buffer + 4, &payload->sender_id, 4);
+  memcpy(buffer + 8, payload->buffer, buff_size);
 }
 
-void decode_udp_ack_packet(ack_packet_t *ack_packet, uint8_t *buffer) {
-  memcpy(&payload->sender_id, buffer + 4, 4);
+void decode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size) {
   memcpy(&payload->packet_uid, buffer, 4);
+  memcpy(&payload->sender_id, buffer + 4, 4);
+  memcpy(payload->buffer, buffer + 8, buff_size);
+  payload->buff_size = buff_size;
 }
-*/
 
 void show_payload(payload_t *payload) {
   if (DEBUG) {
     std::cout << "Payload: "
-              << "{ message: " << payload->message
+              << "{ message: "
+              << buff_as_str(payload->buffer, payload->buff_size)
               << ", packet uid: " << payload->packet_uid
               << ", sender id: " << payload->sender_id << " }\n";
   }
