@@ -42,7 +42,7 @@ static void dump_to_output(uint32_t until_size = 0) {
 
   std::ofstream output_file(output_path, std::ios_base::app);
 
-  uint32_t zero = 0;  // ensuring types match in max
+  uint32_t zero = 0; // ensuring types match in max
   until_size = std::max(until_size, zero);
   while (tcp_handler.received_queue->size() > until_size) {
     payload_t *payload = tcp_handler.received_queue->dequeue();

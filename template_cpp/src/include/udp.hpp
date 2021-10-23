@@ -4,14 +4,11 @@
 #include "common.hpp"
 #include <vector>
 
-#define printf_ip_addr(str, addr)                                              \
-  ({                                                                           \
-    ip_addr_v ip_addr;                                                         \
-    inet_ntop(AF_INET, &addr, ip_addr.ip, 32);                                 \
-    printf(str, ip_addr.ip);                                                   \
-  })
-
-typedef struct in_addr ip_addr_t;
+typedef struct {
+  uint32_t message;
+  uint32_t packet_uid;
+  uint32_t sender_id;
+} payload_t;
 
 size_t get_node_idx_by_id(std::vector<node_t> &nodes, unsigned long id);
 

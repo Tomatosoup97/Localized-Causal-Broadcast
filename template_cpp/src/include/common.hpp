@@ -12,28 +12,11 @@
 
 // Program flags
 #define DEBUG 0
-#define KEEP_ALIVE 0
+#define KEEP_ALIVE 1
 #define DUMP_TO_FILE 1
 #define MILLION 1000000
 
 #define IP_MAXPACKET 65535
-
-typedef struct {
-  char ip[32];
-} ip_addr_v;
-
-typedef struct in_addr ip_addr_t;
-
-typedef struct {
-  uint32_t message;
-  uint32_t packet_uid;
-  uint32_t sender_id;
-} payload_t;
-
-typedef struct {
-  uint32_t packet_uid;
-  uint32_t receiver_id;
-} ack_packet_t;
 
 typedef struct {
   uint32_t id;
