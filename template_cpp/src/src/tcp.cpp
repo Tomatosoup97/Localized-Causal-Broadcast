@@ -11,7 +11,7 @@
 
 #define MAX_PACKET_WAIT_MS 100
 #define SENDING_CHUNK_SIZE (MILLION / 10)
-#define RETRANSMISSION_OFFSET_MS 100
+#define RETRANSMISSION_OFFSET_MS 200
 
 using namespace std::chrono;
 
@@ -61,6 +61,7 @@ void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
 
     if (message->is_ack) {
       // We no longer need it after ACK was sent
+      delete message->payload;
       delete message;
     } else {
       if (message->first_send) {
