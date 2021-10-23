@@ -1,2 +1,4 @@
 __pycache__/
 example/
+logs
+perf.md
