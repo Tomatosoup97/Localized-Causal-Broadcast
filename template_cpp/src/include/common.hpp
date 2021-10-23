@@ -24,11 +24,4 @@ typedef struct {
   unsigned short port;
 } node_t;
 
-#define print_buff(buffer, buff_len)                                           \
-  ({                                                                           \
-    for (ssize_t i = 0; i < buff_len; i++)                                     \
-      printf("%d ", buffer[i]);                                                \
-    printf("\n");                                                              \
-  })
-
 #endif
