@@ -58,6 +58,11 @@ ssize_t receive_udp_payload(int sockfd, payload_t *payload) {
   char buffer[IP_MAXPACKET];
 
   ssize_t datagram_len = receive_udp_packet(sockfd, buffer, IP_MAXPACKET);
+
+  if (datagram_len < 0) {
+    return datagram_len;
+  }
+
   ssize_t buff_size = datagram_len - PAYLOAD_META_SIZE;
   if (DEBUG) {
     std::cout << "Received packet of size " << datagram_len
@@ -94,8 +99,13 @@ ssize_t receive_udp_packet(int sockfd, char *buffer, ssize_t buff_len) {
   ssize_t datagram_len =
       recvfrom(sockfd, buffer, buff_len, MSG_DONTWAIT,
                reinterpret_cast<struct sockaddr *>(&sender), &sender_len);
-  if (datagram_len < 0)
+  if (datagram_len < 0) {
+    if (errno == EAGAIN) {
+      return datagram_len;
+    }
+    std::cout << errno << "\n";
     throw std::runtime_error("recvfrom error");
+  }
 
   char sender_ip_str[20];
   inet_ntop(AF_INET, &(sender.sin_addr), sender_ip_str, sizeof(sender_ip_str));

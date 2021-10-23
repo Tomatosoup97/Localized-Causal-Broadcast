@@ -25,6 +25,12 @@ void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
               select_socket(tcp_handler->sockfd, 0, MAX_PACKET_WAIT_MS))) {
     payload_t *payload = new payload_t;
     buff_size = receive_udp_payload(tcp_handler->sockfd, payload);
+
+    if (buff_size < 0) {
+      delete payload;
+      continue;
+    }
+
     node_t sender_node = nodes[get_node_idx_by_id(nodes, payload->sender_id)];
 
     if (is_receiver) {

@@ -14,6 +14,7 @@
 
 #define DUMP_WHEN_ABOVE (MILLION / 2)
 #define DUMPING_CHUNK (MILLION / 10)
+#define RECEIVER_THREADS_COUNT 4
 
 uint32_t msgs_to_send_count;
 uint32_t enqueued_messages = 0;
@@ -147,9 +148,14 @@ int main(int argc, char **argv) {
 
   if (DEBUG)
     std::cout << "Spawning threads...\n";
-  // Spawn thread for receiving messages
-  std::thread receiver_thread(keep_receiving_messages, &tcp_handler,
-                              is_receiver, std::ref(nodes));
+
+  std::thread receiver_thread_pool[RECEIVER_THREADS_COUNT];
+
+  // Spawn threads for receiving messages
+  for (int i = 0; i < RECEIVER_THREADS_COUNT; i++) {
+    receiver_thread_pool[i] = std::thread(keep_receiving_messages, &tcp_handler,
+                                          is_receiver, std::ref(nodes));
+  }
 
   // Spawn thread for sending messages
   std::thread sender_thread(keep_sending_messages_from_queue, &tcp_handler,
@@ -176,7 +182,11 @@ int main(int argc, char **argv) {
     stop(0);
   }
 
-  receiver_thread.join();
+  // Spawn threads for receiving messages
+  for (int i = 0; i < RECEIVER_THREADS_COUNT; i++) {
+    receiver_thread_pool[i].join();
+  }
+
   sender_thread.join();
   enqueuer_thread.join();
   retransmiter_thread.join();
