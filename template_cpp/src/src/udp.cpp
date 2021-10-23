@@ -64,12 +64,7 @@ ssize_t receive_udp_payload(int sockfd, payload_t *payload) {
   }
 
   ssize_t buff_size = datagram_len - PAYLOAD_META_SIZE;
-  if (DEBUG) {
-    std::cout << "Received packet of size " << datagram_len
-              << ", buff size: " << buff_size << "\n";
-  }
   payload->buffer = new char[buff_size];
-
   decode_udp_payload(payload, buffer, buff_size);
 
   if (DEBUG) {
@@ -103,7 +98,8 @@ ssize_t receive_udp_packet(int sockfd, char *buffer, ssize_t buff_len) {
     if (errno == EAGAIN) {
       return datagram_len;
     }
-    std::cout << errno << "\n";
+    if (DEBUG)
+      std::cout << errno << "\n";
     throw std::runtime_error("recvfrom error");
   }
 

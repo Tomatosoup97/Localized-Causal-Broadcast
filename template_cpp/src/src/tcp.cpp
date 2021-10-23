@@ -31,10 +31,9 @@ void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
       continue;
     }
 
-    node_t sender_node = nodes[get_node_idx_by_id(nodes, payload->sender_id)];
-
     if (is_receiver) {
       // Send back ACK
+      node_t sender_node = nodes[get_node_idx_by_id(nodes, payload->sender_id)];
       was_sent = send_udp_payload(tcp_handler->sockfd, &sender_node, payload,
                                   buff_size);
 
@@ -69,18 +68,11 @@ void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
 
     if (message->is_ack) {
       // We no longer need it after ACK was sent
-      delete message->payload->buffer;
-      delete message->payload;
-      delete message;
+      free_message(message);
     } else {
       if (message->first_send) {
         payload_t *payload = new payload_t;
-        payload->buffer = new char[message->payload->buff_size];
-
-        payload->buff_size = message->payload->buff_size;
-        payload->packet_uid = message->payload->packet_uid;
-        payload->sender_id = message->payload->sender_id;
-        memcpy(payload->buffer, message->payload->buffer, payload->buff_size);
+        copy_payload(payload, message->payload);
 
         if (DEBUG) {
           std::cout << "Pushing to received queue: ";
@@ -107,10 +99,8 @@ void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
 
     if (tcp_handler->delivered->contains(message->payload->sender_id,
                                          packet_uid)) {
-      // already delivered - no need to retransmit, we can free memory
-      delete message->payload->buffer;
-      delete message->payload;
-      delete message;
+      // already delivered - no need to retransmit
+      free_message(message);
       continue;
     }
 
@@ -175,6 +165,20 @@ void construct_message(message_t *message, node_t *sender, node_t *recipient,
     std::cout << "Constructed ";
     show_payload(message->payload);
   }
+}
+
+void copy_payload(payload_t *dest, payload_t *source) {
+  dest->buffer = new char[source->buff_size];
+  dest->buff_size = source->buff_size;
+  dest->packet_uid = source->packet_uid;
+  dest->sender_id = source->sender_id;
+  memcpy(dest->buffer, source->buffer, source->buff_size);
+}
+
+void free_message(message_t *message) {
+  delete message->payload->buffer;
+  delete message->payload;
+  delete message;
 }
 
 bool should_start_retransmission(steady_clock::time_point sending_start) {
