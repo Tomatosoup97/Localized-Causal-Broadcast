@@ -11,7 +11,8 @@ std::string buff_as_str(char *buffer, ssize_t size) {
 }
 
 void encode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size) {
-  uint32_t encoded_packet_id = contract_pair(payload->owner_id, payload->packet_uid);
+  uint32_t encoded_packet_id =
+      contract_pair(payload->owner_id, payload->packet_uid);
   memcpy(buffer, &encoded_packet_id, 4);
   memcpy(buffer + 4, &payload->sender_id, 4);
   memcpy(buffer + 8, &payload->is_ack, 1);

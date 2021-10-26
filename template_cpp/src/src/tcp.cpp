@@ -41,7 +41,7 @@ void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
                                   buff_size);
     }
 
-    tcp_handler->delivered->insert(payload->sender_id, payload->packet_uid);
+    tcp_handler->delivered->insert(payload->sender_id, payload);
     uniform_reliable_broadcast(tcp_handler, nodes, payload);
   }
 }
@@ -85,7 +85,7 @@ void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
     uint32_t packet_uid = message->payload->packet_uid;
 
     if (tcp_handler->delivered->contains(message->payload->sender_id,
-                                         packet_uid)) {
+                                         message->payload)) {
       // already delivered - no need to retransmit
       free_message(message);
       continue;

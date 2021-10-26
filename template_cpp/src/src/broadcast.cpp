@@ -18,8 +18,8 @@ void best_effort_broadcast(tcp_handler_t *tcp_handler,
 void uniform_reliable_broadcast(tcp_handler_t *tcp_handler,
                                 std::vector<node_t> &nodes,
                                 payload_t *payload) {
-  if (!tcp_handler->delivered->was_seen(payload->packet_uid)) {
-    tcp_handler->delivered->mark_as_seen(payload->packet_uid);
+  if (!tcp_handler->delivered->was_seen(payload)) {
+    tcp_handler->delivered->mark_as_seen(payload);
     best_effort_broadcast(tcp_handler, nodes, payload);
   }
 }
