@@ -2,6 +2,7 @@
 #define _TCP_H_
 
 #include <utility>
+#include <vector>
 
 #include "common.hpp"
 #include "delivered_set.hpp"

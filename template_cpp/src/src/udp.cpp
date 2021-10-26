@@ -13,7 +13,7 @@
 #include "messages.hpp"
 #include "udp.hpp"
 
-size_t get_node_idx_by_id(std::vector<node_t> &nodes, unsigned long id) {
+size_t get_node_idx_by_id(std::vector<node_t> &nodes, uint32_t id) {
   for (size_t index = 0; index < nodes.size(); ++index) {
     node_t node = nodes[index];
     if (node.id == id) {
@@ -44,8 +44,9 @@ bool send_udp_payload(int sockfd, node_t *receiver, payload_t *payload,
     if (was_sent) {
       std::cout << "Sent ";
       show_payload(payload);
-    } else
+    } else {
       std::cout << "Could not deliver the message!\n";
+    }
   }
   return was_sent;
 }

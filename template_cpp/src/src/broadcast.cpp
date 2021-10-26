@@ -11,7 +11,7 @@ void best_effort_broadcast(tcp_handler_t *tcp_handler,
     message->payload = payload;
     message->payload->sender_id = tcp_handler->current_node->id;
     tcp_handler->sending_queue->enqueue(message);
-    // TODO: ensure message_t is freed
+    // TODO:  ensure message_t is freed
   }
 }
 

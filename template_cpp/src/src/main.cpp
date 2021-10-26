@@ -2,6 +2,7 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <signal.h>
 #include <sys/types.h>
 #include <thread>
 
@@ -11,7 +12,6 @@
 #include "parser.hpp"
 #include "tcp.hpp"
 #include "udp.hpp"
-#include <signal.h>
 
 #define DUMP_WHEN_ABOVE (MILLION / 2)
 #define DUMPING_CHUNK (MILLION / 10)
@@ -111,7 +111,7 @@ int main(int argc, char **argv) {
   output_file.close();
 
   std::ifstream configFile(parser.configPath());
-  size_t receiver_id;
+  uint32_t receiver_id;
 
   configFile >> msgs_to_send_count;
   configFile >> receiver_id;
@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
   configFile.close();
 
   node_t receiver_node = nodes[get_node_idx_by_id(nodes, receiver_id)];
-  myself_node = nodes[get_node_idx_by_id(nodes, parser.id())];
+  myself_node = nodes[get_node_idx_by_id(nodes, static_cast<uint32_t>(parser.id()))];
 
   bool should_send_messages = receiver_id != parser.id();
   is_receiver = !should_send_messages;
