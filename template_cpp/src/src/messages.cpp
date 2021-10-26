@@ -11,7 +11,8 @@ std::string buff_as_str(char *buffer, ssize_t size) {
 }
 
 void encode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size) {
-  memcpy(buffer, &payload->packet_uid, 4);
+  uint32_t encoded_packet_id = contract_pair(payload->owner_id, payload->packet_uid);
+  memcpy(buffer, &encoded_packet_id, 4);
   memcpy(buffer + 4, &payload->sender_id, 4);
   memcpy(buffer + 8, &payload->is_ack, 1);
   memcpy(buffer + 9, payload->buffer, buff_size);
@@ -23,6 +24,10 @@ void decode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size) {
   memcpy(&payload->is_ack, buffer + 8, 1);
   memcpy(payload->buffer, buffer + 9, buff_size);
   payload->buff_size = buff_size;
+
+  auto decoded_packet_id = unfold_pair(payload->packet_uid);
+  payload->owner_id = decoded_packet_id.first;
+  payload->packet_uid = decoded_packet_id.second;
 }
 
 void copy_payload(payload_t *dest, payload_t *source) {

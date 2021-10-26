@@ -13,6 +13,7 @@ using namespace std::chrono;
 
 typedef struct {
   ssize_t buff_size;
+  uint32_t owner_id;
   uint32_t packet_uid;
   uint32_t sender_id;
   bool is_ack = false;
