@@ -25,7 +25,6 @@ node_t myself_node;
 tcp_handler_t tcp_handler;
 
 const char *output_path;
-bool is_receiver;
 
 static bool all_delivered() {
   return enqueued_messages >= msgs_to_send_count &&
@@ -44,7 +43,8 @@ static void dump_to_output(uint32_t until_size = 0) {
   while (tcp_handler.received_queue->size() > until_size) {
     payload_t *payload = tcp_handler.received_queue->dequeue();
 
-    if (is_receiver) {
+    // TODO
+    if (true) {
       output_file << "d " << payload->sender_id << " "
                   << buff_as_str(payload->buffer, payload->buff_size) << "\n";
     } else {
@@ -111,30 +111,20 @@ int main(int argc, char **argv) {
   output_file.close();
 
   std::ifstream configFile(parser.configPath());
-  uint32_t receiver_id;
-
   configFile >> msgs_to_send_count;
-  configFile >> receiver_id;
-
   configFile.close();
 
-  node_t receiver_node = nodes[get_node_idx_by_id(nodes, receiver_id)];
-  myself_node = nodes[get_node_idx_by_id(nodes, static_cast<uint32_t>(parser.id()))];
-
-  bool should_send_messages = receiver_id != parser.id();
-  is_receiver = !should_send_messages;
-  bool was_sent;
-
-  int sockfd = bind_socket(myself_node.port);
+  myself_node =
+      nodes[get_node_idx_by_id(nodes, static_cast<uint32_t>(parser.id()))];
 
   MessagesQueue sending_queue;
   MessagesQueue retrans_queue;
   PayloadQueue received_queue;
   DeliveredSet delivered = DeliveredSet(&myself_node, nodes.size());
 
-  tcp_handler.sockfd = sockfd;
+  tcp_handler.sockfd = bind_socket(myself_node.port);
+  ;
   tcp_handler.finito = &finito;
-  tcp_handler.is_receiver = is_receiver;
   tcp_handler.current_node = &myself_node;
 
   tcp_handler.sending_queue = &sending_queue;
@@ -149,8 +139,8 @@ int main(int argc, char **argv) {
 
   // Spawn threads for receiving messages
   for (int i = 0; i < RECEIVER_THREADS_COUNT; i++) {
-    receiver_thread_pool[i] = std::thread(keep_receiving_messages, &tcp_handler,
-                                          is_receiver, std::ref(nodes));
+    receiver_thread_pool[i] =
+        std::thread(keep_receiving_messages, &tcp_handler, std::ref(nodes));
   }
 
   // Spawn thread for sending messages
@@ -159,7 +149,7 @@ int main(int argc, char **argv) {
 
   // Spawn thread for enqueuing messages
   std::thread enqueuer_thread(keep_enqueuing_messages, &tcp_handler,
-                              &myself_node, &receiver_node, &enqueued_messages,
+                              &myself_node, &enqueued_messages,
                               msgs_to_send_count);
 
   // Spawn thread for retransmitting messages

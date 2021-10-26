@@ -18,8 +18,7 @@
 
 using namespace std::chrono;
 
-void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
-                     std::vector<node_t> &nodes) {
+void receive_message(tcp_handler_t *tcp_handler, std::vector<node_t> &nodes) {
   int is_socket_ready;
   bool was_sent;
   ssize_t buff_size;
@@ -46,11 +45,11 @@ void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
   }
 }
 
-void keep_receiving_messages(tcp_handler_t *tcp_handler, bool is_receiver,
+void keep_receiving_messages(tcp_handler_t *tcp_handler,
                              std::vector<node_t> &nodes) {
 
   while (!*tcp_handler->finito)
-    receive_message(tcp_handler, is_receiver, nodes);
+    receive_message(tcp_handler, nodes);
 }
 
 void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
@@ -76,10 +75,6 @@ void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
 }
 
 void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
-  if (tcp_handler->is_receiver) {
-    return;
-  }
-
   while (!*tcp_handler->finito) {
     message_t *message = tcp_handler->retrans_queue->dequeue();
     uint32_t packet_uid = message->payload->packet_uid;
@@ -105,14 +100,10 @@ void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
 }
 
 void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
-                             node_t *receiver_node, uint32_t *enqueued_messages,
+                             uint32_t *enqueued_messages,
                              uint32_t msgs_to_send_count) {
   payload_t *payload;
   message_t *message;
-
-  if (tcp_handler->is_receiver) {
-    return;
-  }
 
   while (*enqueued_messages < msgs_to_send_count) {
     if (tcp_handler->sending_queue->size() < SENDING_CHUNK_SIZE) {
@@ -126,8 +117,7 @@ void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
         payload = new payload_t;
         message = new message_t;
         message->payload = payload;
-        construct_message(message, sender_node, receiver_node,
-                          *enqueued_messages);
+        construct_message(message, sender_node, *enqueued_messages);
 
         tcp_handler->sending_queue->enqueue(message);
       }
@@ -135,17 +125,17 @@ void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
   }
 }
 
-void construct_message(message_t *message, node_t *sender, node_t *recipient,
-                       uint32_t seq_num) {
+void construct_message(message_t *message, node_t *sender, uint32_t seq_num) {
   std::string msg_content = std::to_string(seq_num);
   message->payload->buffer = new char[msg_content.length()];
 
   strcpy(message->payload->buffer, msg_content.c_str());
   message->payload->packet_uid = seq_num;
+
   message->payload->sender_id = sender->id;
+  message->payload->owner_id = sender->id;
   message->payload->buff_size = msg_content.length();
 
-  message->recipient = recipient;
   message->first_send = true;
 
   if (DEBUG) {
