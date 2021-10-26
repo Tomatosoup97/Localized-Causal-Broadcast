@@ -1,13 +1,13 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
-#include <math.h>
 #include <sys/types.h>
 #include <thread>
 #include <utility>
 
 #include "broadcast.hpp"
 #include "common.hpp"
+#include "messages.hpp"
 #include "tcp.hpp"
 #include "ts_queue.hpp"
 #include "udp.hpp"
@@ -135,25 +135,6 @@ void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
   }
 }
 
-uint32_t contract_pair(uint32_t k1, uint32_t k2) {
-  // Cantor pairing bijective function
-  uint32_t s = k1 + k2;
-  return s * (s + 1) / 2 + k2;
-}
-
-std::pair<uint32_t, uint32_t> unfold_pair(uint32_t p) {
-  // Inversion of Cantor pairing bijective function
-  // TODO: is it numerically correct?
-  double wd;
-  uint32_t w, t, x, y;
-  wd = std::sqrt(8 * p + 1) - 1;
-  w = static_cast<uint32_t>(std::floor(wd / 2));
-  t = static_cast<uint32_t>((std::pow(w, 2) + w) / 2);
-  y = p - t;
-  x = w - y;
-  return std::make_pair(x, y);
-}
-
 void construct_message(message_t *message, node_t *sender, node_t *recipient,
                        uint32_t seq_num) {
   std::string msg_content = std::to_string(seq_num);
@@ -171,20 +152,6 @@ void construct_message(message_t *message, node_t *sender, node_t *recipient,
     std::cout << "Constructed ";
     show_payload(message->payload);
   }
-}
-
-void copy_payload(payload_t *dest, payload_t *source) {
-  dest->buffer = new char[source->buff_size];
-  dest->buff_size = source->buff_size;
-  dest->packet_uid = source->packet_uid;
-  dest->sender_id = source->sender_id;
-  memcpy(dest->buffer, source->buffer, source->buff_size);
-}
-
-void free_message(message_t *message) {
-  delete message->payload->buffer;
-  delete message->payload;
-  delete message;
 }
 
 bool should_start_retransmission(steady_clock::time_point sending_start) {

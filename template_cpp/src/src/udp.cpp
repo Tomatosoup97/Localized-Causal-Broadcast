@@ -10,12 +10,8 @@
 #include <vector>
 
 #include "common.hpp"
+#include "messages.hpp"
 #include "udp.hpp"
-
-std::string buff_as_str(char *buffer, ssize_t size) {
-  std::string str(buffer, size);
-  return str;
-}
 
 size_t get_node_idx_by_id(std::vector<node_t> &nodes, unsigned long id) {
   for (size_t index = 0; index < nodes.size(); ++index) {
@@ -108,31 +104,6 @@ ssize_t receive_udp_packet(int sockfd, char *buffer, ssize_t buff_len) {
 
   fflush(stdout);
   return datagram_len;
-}
-
-void encode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size) {
-  memcpy(buffer, &payload->packet_uid, 4);
-  memcpy(buffer + 4, &payload->sender_id, 4);
-  memcpy(buffer + 8, &payload->is_ack, 1);
-  memcpy(buffer + 9, payload->buffer, buff_size);
-}
-
-void decode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size) {
-  memcpy(&payload->packet_uid, buffer, 4);
-  memcpy(&payload->sender_id, buffer + 4, 4);
-  memcpy(&payload->is_ack, buffer + 8, 1);
-  memcpy(payload->buffer, buffer + 9, buff_size);
-  payload->buff_size = buff_size;
-}
-
-void show_payload(payload_t *payload) {
-  if (DEBUG) {
-    std::cout << "Payload: "
-              << "{ message: "
-              << buff_as_str(payload->buffer, payload->buff_size)
-              << ", packet uid: " << payload->packet_uid
-              << ", sender id: " << payload->sender_id << " }\n";
-  }
 }
 
 int select_socket(int sockfd, int secs, int milisecs) {

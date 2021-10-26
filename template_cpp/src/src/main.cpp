@@ -7,6 +7,7 @@
 
 #include "common.hpp"
 #include "delivered_set.hpp"
+#include "messages.hpp"
 #include "parser.hpp"
 #include "tcp.hpp"
 #include "udp.hpp"
@@ -30,11 +31,6 @@ static bool all_delivered() {
   return enqueued_messages >= msgs_to_send_count &&
          tcp_handler.sending_queue->size() == 0 &&
          tcp_handler.retrans_queue->size() == 0;
-}
-
-static void release_memory() {
-  if (DEBUG)
-    std::cout << "Cleaning up memory...\n";
 }
 
 static void dump_to_output(uint32_t until_size = 0) {
@@ -79,7 +75,6 @@ static void stop(int) {
 
   if (DUMP_TO_FILE)
     dump_to_output();
-  release_memory();
   exit(0);
 }
 
