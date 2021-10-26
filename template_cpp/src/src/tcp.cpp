@@ -1,9 +1,12 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <math.h>
 #include <sys/types.h>
 #include <thread>
+#include <utility>
 
+#include "broadcast.hpp"
 #include "common.hpp"
 #include "tcp.hpp"
 #include "ts_queue.hpp"
@@ -31,21 +34,15 @@ void receive_message(tcp_handler_t *tcp_handler, bool is_receiver,
       continue;
     }
 
-    if (is_receiver) {
-      // Send back ACK
+    if (!payload->is_ack) {
+      payload->is_ack = true;
       node_t sender_node = nodes[get_node_idx_by_id(nodes, payload->sender_id)];
       was_sent = send_udp_payload(tcp_handler->sockfd, &sender_node, payload,
                                   buff_size);
-
-      // If first seen -> add to received queue
-      if (!tcp_handler->delivered->contains(payload->sender_id,
-                                            payload->packet_uid)) {
-        tcp_handler->received_queue->enqueue(payload);
-      }
     }
 
-    // Mark the message as delivered
     tcp_handler->delivered->insert(payload->sender_id, payload->packet_uid);
+    uniform_reliable_broadcast(tcp_handler, nodes, payload);
   }
 }
 
@@ -66,20 +63,10 @@ void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
     was_sent = send_udp_payload(tcp_handler->sockfd, message->recipient,
                                 message->payload, message->payload->buff_size);
 
-    if (message->is_ack) {
+    if (message->payload->is_ack) {
       // We no longer need it after ACK was sent
       free_message(message);
     } else {
-      if (message->first_send) {
-        payload_t *payload = new payload_t;
-        copy_payload(payload, message->payload);
-
-        if (DEBUG) {
-          std::cout << "Pushing to received queue: ";
-          show_payload(payload);
-        }
-        tcp_handler->received_queue->enqueue(payload);
-      }
       // Retransmitting
       message->sending_time = steady_clock::now();
       message->first_send = false;
@@ -146,6 +133,25 @@ void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
       }
     }
   }
+}
+
+uint32_t contract_pair(uint32_t k1, uint32_t k2) {
+  // Cantor pairing bijective function
+  uint32_t s = k1 + k2;
+  return s * (s + 1) / 2 + k2;
+}
+
+std::pair<uint32_t, uint32_t> unfold_pair(uint32_t p) {
+  // Inversion of Cantor pairing bijective function
+  // TODO: is it numerically correct?
+  double wd;
+  uint32_t w, t, x, y;
+  wd = std::sqrt(8 * p + 1) - 1;
+  w = static_cast<uint32_t>(std::floor(wd / 2));
+  t = static_cast<uint32_t>((std::pow(w, 2) + w) / 2);
+  y = p - t;
+  x = w - y;
+  return std::make_pair(x, y);
 }
 
 void construct_message(message_t *message, node_t *sender, node_t *recipient,

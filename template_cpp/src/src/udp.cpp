@@ -113,13 +113,15 @@ ssize_t receive_udp_packet(int sockfd, char *buffer, ssize_t buff_len) {
 void encode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size) {
   memcpy(buffer, &payload->packet_uid, 4);
   memcpy(buffer + 4, &payload->sender_id, 4);
-  memcpy(buffer + 8, payload->buffer, buff_size);
+  memcpy(buffer + 8, &payload->is_ack, 1);
+  memcpy(buffer + 9, payload->buffer, buff_size);
 }
 
 void decode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size) {
   memcpy(&payload->packet_uid, buffer, 4);
   memcpy(&payload->sender_id, buffer + 4, 4);
-  memcpy(payload->buffer, buffer + 8, buff_size);
+  memcpy(&payload->is_ack, buffer + 8, 1);
+  memcpy(payload->buffer, buffer + 9, buff_size);
   payload->buff_size = buff_size;
 }
 

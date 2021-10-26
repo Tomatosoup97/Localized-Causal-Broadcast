@@ -135,11 +135,12 @@ int main(int argc, char **argv) {
   MessagesQueue sending_queue;
   MessagesQueue retrans_queue;
   PayloadQueue received_queue;
-  DeliveredSet delivered = DeliveredSet(nodes.size());
+  DeliveredSet delivered = DeliveredSet(&myself_node, nodes.size());
 
   tcp_handler.sockfd = sockfd;
   tcp_handler.finito = &finito;
   tcp_handler.is_receiver = is_receiver;
+  tcp_handler.current_node = &myself_node;
 
   tcp_handler.sending_queue = &sending_queue;
   tcp_handler.retrans_queue = &retrans_queue;

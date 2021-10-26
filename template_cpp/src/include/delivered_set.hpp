@@ -1,6 +1,7 @@
 #ifndef DELIVERED_SET
 #define DELIVERED_SET
 
+#include "common.hpp"
 #include <atomic>
 #include <mutex>
 #include <unordered_map>
@@ -18,6 +19,7 @@ private:
 
   mutable std::mutex mtx;
   uint32_t keys;
+  node_t *current_node;
 
   // points where we have the first "hole" in delivered
   std::unordered_map<uint32_t, std::atomic<uint32_t>> received_up_to;
@@ -27,8 +29,9 @@ private:
   }
 
 public:
-  DeliveredSet(size_t keys_in) : s(), mtx() {
+  DeliveredSet(node_t *current_node_in, size_t keys_in) : s(), mtx() {
     keys = static_cast<uint32_t>(keys_in);
+    current_node = current_node_in;
 
     for (uint32_t i = 0; i <= keys; i++) {
       // initialize delivered sets
@@ -72,6 +75,12 @@ public:
 
   bool can_urb_deliver(uint32_t packet_id) {
     return acked_counter[packet_id] > (keys / 2);
+  }
+
+  void mark_as_seen(uint32_t packet_id) { insert(current_node->id, packet_id); }
+
+  bool was_seen(uint32_t packet_id) {
+    return contains(current_node->id, packet_id);
   }
 
   std::unordered_set<uint32_t> *get_set(uint32_t node_id) { return s[node_id]; }

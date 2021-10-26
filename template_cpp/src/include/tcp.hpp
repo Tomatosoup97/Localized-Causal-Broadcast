@@ -24,6 +24,7 @@ typedef struct {
   int sockfd;
   bool is_receiver;
   bool *finito;
+  node_t *current_node;
   DeliveredSet *delivered;
   MessagesQueue *sending_queue;
   MessagesQueue *retrans_queue;
@@ -53,5 +54,9 @@ void copy_payload(payload_t *dest, payload_t *source);
 void free_message(message_t *message);
 
 bool should_start_retransmission(steady_clock::time_point sending_start);
+
+uint32_t contract_pair(uint32_t k1, uint32_t k2);
+
+std::pair<uint32_t, uint32_t> unfold_pair(uint32_t p);
 
 #endif
