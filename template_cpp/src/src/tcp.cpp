@@ -41,7 +41,11 @@ void receive_message(tcp_handler_t *tcp_handler, std::vector<node_t> &nodes) {
     }
 
     tcp_handler->delivered->insert(payload->sender_id, payload);
-    uniform_reliable_broadcast(tcp_handler, nodes, payload);
+
+    // TODO: put that somewhere else
+    if (!PERFECT_LINKS_MODE) {
+      uniform_reliable_broadcast(tcp_handler, nodes, payload);
+    }
   }
 }
 
@@ -100,10 +104,11 @@ void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
 }
 
 void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
-                             uint32_t *enqueued_messages,
+                             node_t *receiver_node, uint32_t *enqueued_messages,
                              uint32_t msgs_to_send_count) {
   payload_t *payload;
   message_t *message;
+  node_t *recipient;
 
   while (*enqueued_messages < msgs_to_send_count) {
     if (tcp_handler->sending_queue->size() < SENDING_CHUNK_SIZE) {
@@ -117,6 +122,7 @@ void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
         payload = new payload_t;
         message = new message_t;
         message->payload = payload;
+        message->recipient = receiver_node;
         construct_message(message, sender_node, *enqueued_messages);
 
         tcp_handler->sending_queue->enqueue(message);

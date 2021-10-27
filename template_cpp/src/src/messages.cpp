@@ -47,10 +47,14 @@ void free_message(message_t *message) {
 
 void show_payload(payload_t *payload) {
   if (DEBUG) {
+    if (payload->is_ack) {
+      std::cout << "ACK ";
+    }
     std::cout << "Payload: "
               << "{ message: "
               << buff_as_str(payload->buffer, payload->buff_size)
               << ", packet uid: " << payload->packet_uid
+              << ", owner id: " << payload->owner_id
               << ", sender id: " << payload->sender_id << " }\n";
   }
 }

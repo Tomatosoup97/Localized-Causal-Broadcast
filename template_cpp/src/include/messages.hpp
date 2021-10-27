@@ -10,7 +10,7 @@
 
 using namespace std::chrono; // noqa
 
-#define PAYLOAD_META_SIZE 8
+#define PAYLOAD_META_SIZE 9
 
 typedef struct {
   ssize_t buff_size;

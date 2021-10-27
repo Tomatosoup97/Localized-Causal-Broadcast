@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <thread>
 
+#include "broadcast.hpp"
 #include "common.hpp"
 #include "delivered_set.hpp"
 #include "messages.hpp"
@@ -111,7 +112,18 @@ int main(int argc, char **argv) {
   output_file.close();
 
   std::ifstream configFile(parser.configPath());
+  uint32_t receiver_id;
+  bool should_send_messages = true;
+  node_t receiver_node;
+
   configFile >> msgs_to_send_count;
+
+  if (PERFECT_LINKS_MODE) {
+    configFile >> receiver_id;
+    receiver_node = nodes[get_node_idx_by_id(nodes, receiver_id)];
+    should_send_messages = receiver_id != parser.id();
+  }
+
   configFile.close();
 
   myself_node =
@@ -123,7 +135,6 @@ int main(int argc, char **argv) {
   DeliveredSet delivered = DeliveredSet(&myself_node, nodes.size());
 
   tcp_handler.sockfd = bind_socket(myself_node.port);
-  ;
   tcp_handler.finito = &finito;
   tcp_handler.current_node = &myself_node;
 
@@ -135,6 +146,7 @@ int main(int argc, char **argv) {
   if (DEBUG)
     std::cout << "Spawning threads...\n";
 
+  std::thread enqueuer_thread;
   std::thread receiver_thread_pool[RECEIVER_THREADS_COUNT];
 
   // Spawn threads for receiving messages
@@ -148,9 +160,11 @@ int main(int argc, char **argv) {
                             std::ref(nodes));
 
   // Spawn thread for enqueuing messages
-  std::thread enqueuer_thread(keep_enqueuing_messages, &tcp_handler,
-                              &myself_node, &enqueued_messages,
-                              msgs_to_send_count);
+  if (PERFECT_LINKS_MODE && should_send_messages) {
+    enqueuer_thread =
+        std::thread(keep_enqueuing_messages, &tcp_handler, &myself_node,
+                    &receiver_node, &enqueued_messages, msgs_to_send_count);
+  }
 
   // Spawn thread for retransmitting messages
   std::thread retransmiter_thread(keep_retransmitting_messages, &tcp_handler);
@@ -168,7 +182,7 @@ int main(int argc, char **argv) {
     stop(0);
   }
 
-  // Spawn threads for receiving messages
+  // Join threads for receiving messages
   for (int i = 0; i < RECEIVER_THREADS_COUNT; i++) {
     receiver_thread_pool[i].join();
   }

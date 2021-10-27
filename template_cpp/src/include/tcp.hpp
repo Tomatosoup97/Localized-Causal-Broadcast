@@ -35,12 +35,12 @@ void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
 
 void keep_retransmitting_messages(tcp_handler_t *tcp_handler);
 
+bool should_start_retransmission(steady_clock::time_point sending_start);
+
 void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
-                             uint32_t *enqueued_messages,
+                             node_t *receiver_node, uint32_t *enqueued_messages,
                              uint32_t msgs_to_send_count);
 
 void construct_message(message_t *message, node_t *sender, uint32_t seq_num);
-
-bool should_start_retransmission(steady_clock::time_point sending_start);
 
 #endif
