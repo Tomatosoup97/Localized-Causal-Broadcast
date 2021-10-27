@@ -13,9 +13,9 @@
 #include "messages.hpp"
 #include "udp.hpp"
 
-size_t get_node_idx_by_id(std::vector<node_t> &nodes, uint32_t id) {
-  for (size_t index = 0; index < nodes.size(); ++index) {
-    node_t node = nodes[index];
+size_t get_node_idx_by_id(std::vector<node_t> *nodes, uint32_t id) {
+  for (size_t index = 0; index < nodes->size(); ++index) {
+    node_t node = (*nodes)[index];
     if (node.id == id) {
       return index;
     }

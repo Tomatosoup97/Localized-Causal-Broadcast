@@ -120,14 +120,14 @@ int main(int argc, char **argv) {
 
   if (PERFECT_LINKS_MODE) {
     configFile >> receiver_id;
-    receiver_node = nodes[get_node_idx_by_id(nodes, receiver_id)];
+    receiver_node = nodes[get_node_idx_by_id(&nodes, receiver_id)];
     should_send_messages = receiver_id != parser.id();
   }
 
   configFile.close();
 
   myself_node =
-      nodes[get_node_idx_by_id(nodes, static_cast<uint32_t>(parser.id()))];
+      nodes[get_node_idx_by_id(&nodes, static_cast<uint32_t>(parser.id()))];
 
   MessagesQueue sending_queue;
   MessagesQueue retrans_queue;
@@ -137,6 +137,7 @@ int main(int argc, char **argv) {
   tcp_handler.sockfd = bind_socket(myself_node.port);
   tcp_handler.finito = &finito;
   tcp_handler.current_node = &myself_node;
+  tcp_handler.nodes = &nodes;
 
   tcp_handler.sending_queue = &sending_queue;
   tcp_handler.retrans_queue = &retrans_queue;
@@ -152,12 +153,11 @@ int main(int argc, char **argv) {
   // Spawn threads for receiving messages
   for (int i = 0; i < RECEIVER_THREADS_COUNT; i++) {
     receiver_thread_pool[i] =
-        std::thread(keep_receiving_messages, &tcp_handler, std::ref(nodes));
+        std::thread(keep_receiving_messages, &tcp_handler);
   }
 
   // Spawn thread for sending messages
-  std::thread sender_thread(keep_sending_messages_from_queue, &tcp_handler,
-                            std::ref(nodes));
+  std::thread sender_thread(keep_sending_messages_from_queue, &tcp_handler);
 
   // Spawn thread for enqueuing messages
   if (PERFECT_LINKS_MODE && should_send_messages) {

@@ -5,7 +5,7 @@
 
 #include "common.hpp"
 
-size_t get_node_idx_by_id(std::vector<node_t> &nodes, uint32_t id);
+size_t get_node_idx_by_id(std::vector<node_t> *nodes, uint32_t id);
 
 bool send_udp_payload(int sockfd, node_t *receiver, payload_t *payload,
                       ssize_t size);

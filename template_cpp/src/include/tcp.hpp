@@ -19,19 +19,18 @@ typedef struct {
   int sockfd;
   bool *finito;
   node_t *current_node;
+  std::vector<node_t> *nodes;
   DeliveredSet *delivered;
   MessagesQueue *sending_queue;
   MessagesQueue *retrans_queue;
   PayloadQueue *received_queue;
 } tcp_handler_t;
 
-void receive_message(tcp_handler_t *tcp_handler, std::vector<node_t> &nodes);
+void receive_message(tcp_handler_t *tcp_handler);
 
-void keep_receiving_messages(tcp_handler_t *tcp_handler,
-                             std::vector<node_t> &nodes);
+void keep_receiving_messages(tcp_handler_t *tcp_handler);
 
-void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
-                                      std::vector<node_t> &nodes);
+void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler);
 
 void keep_retransmitting_messages(tcp_handler_t *tcp_handler);
 

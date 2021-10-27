@@ -18,7 +18,7 @@
 
 using namespace std::chrono;
 
-void receive_message(tcp_handler_t *tcp_handler, std::vector<node_t> &nodes) {
+void receive_message(tcp_handler_t *tcp_handler) {
   int is_socket_ready;
   bool was_sent;
   ssize_t buff_size;
@@ -35,7 +35,8 @@ void receive_message(tcp_handler_t *tcp_handler, std::vector<node_t> &nodes) {
 
     if (!payload->is_ack) {
       payload->is_ack = true;
-      node_t sender_node = nodes[get_node_idx_by_id(nodes, payload->sender_id)];
+      node_t sender_node = (*tcp_handler->nodes)[get_node_idx_by_id(
+          tcp_handler->nodes, payload->sender_id)];
       was_sent = send_udp_payload(tcp_handler->sockfd, &sender_node, payload,
                                   buff_size);
     }
@@ -44,20 +45,18 @@ void receive_message(tcp_handler_t *tcp_handler, std::vector<node_t> &nodes) {
 
     // TODO: put that somewhere else
     if (!PERFECT_LINKS_MODE) {
-      uniform_reliable_broadcast(tcp_handler, nodes, payload);
+      uniform_reliable_broadcast(tcp_handler, payload);
     }
   }
 }
 
-void keep_receiving_messages(tcp_handler_t *tcp_handler,
-                             std::vector<node_t> &nodes) {
+void keep_receiving_messages(tcp_handler_t *tcp_handler) {
 
   while (!*tcp_handler->finito)
-    receive_message(tcp_handler, nodes);
+    receive_message(tcp_handler);
 }
 
-void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler,
-                                      std::vector<node_t> &nodes) {
+void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler) {
   bool was_sent;
 
   while (!*tcp_handler->finito) {
