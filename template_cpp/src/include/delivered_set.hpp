@@ -24,8 +24,10 @@ private:
   Map<SenderID, Map<OwnerID, Set<PacketID> *>> acked;
 
   Map<OwnerID, Map<PacketID, Counter>> acked_counter;
+  Map<OwnerID, Map<PacketID, payload_t *>> undelivered;
 
   mutable std::mutex mtx;
+  mutable std::mutex received_mtx;
   uint32_t keys;
   node_t *current_node;
 
@@ -40,7 +42,7 @@ public:
   PayloadQueue *urb_deliverable;
 
   DeliveredSet(node_t *current_node_in, size_t keys_in)
-      : acked(), acked_counter(), mtx() {
+      : acked(), acked_counter(), undelivered(), mtx(), received_mtx() {
     keys = static_cast<uint32_t>(keys_in);
     current_node = current_node_in;
 
@@ -63,35 +65,35 @@ public:
   }
 
   void insert(SenderID sender_id, payload_t *payload) {
+    std::lock_guard<std::mutex> lock(mtx);
     payload_t *log_payload;
-    mtx.lock();
     bool seen = contains_unsafe(sender_id, payload);
 
     if (!seen) {
       acked[sender_id][payload->owner_id]->insert(payload->packet_uid);
-    }
-    mtx.unlock();
-
-    if (!seen) {
       acked_counter[payload->owner_id][payload->packet_uid]++;
 
-      if (can_urb_deliver(payload)) {
-
+      if (acked_counter[payload->owner_id][payload->packet_uid] == 1) {
         log_payload = new payload_t;
         copy_payload(log_payload, payload);
-        urb_deliverable->enqueue(log_payload);
+        undelivered[payload->owner_id][payload->packet_uid] = log_payload;
       }
     }
 
-    // TODO: rethink this optimalization later
-    /*
     if (received_up_to[payload->owner_id] == payload->packet_uid) {
-      while (contains_unsafe(sender_id, received_up_to[sender_id])) {
-        s[sender_id]->erase(received_up_to[sender_id]);
+      while (can_urb_deliver(payload->owner_id,
+                             received_up_to[payload->owner_id])) {
+        uint32_t packet_uid = received_up_to[payload->owner_id];
+        // TODO rethink this
+        /* s[sender_id]->erase(received_up_to[sender_id]); */
+
+        log_payload = undelivered[payload->owner_id][packet_uid];
+        urb_deliverable->enqueue(log_payload);
+        undelivered[payload->owner_id].erase(packet_uid);
+
         received_up_to[payload->owner_id]++;
       }
     }
-    */
   }
 
   bool contains(SenderID sender_id, payload_t *payload) {
@@ -105,10 +107,8 @@ public:
     return contains_unsafe(sender_id, payload);
   }
 
-  bool can_urb_deliver(payload_t *payload) {
-    uint32_t current_counter =
-        acked_counter[payload->owner_id][payload->packet_uid];
-    return (keys / 2) + 1 >= current_counter && current_counter > (keys / 2);
+  bool can_urb_deliver(uint32_t owner_id, uint32_t packet_uid) {
+    return acked_counter[owner_id][packet_uid] > (keys / 2);
   }
 
   void mark_as_seen(payload_t *payload) { insert(current_node->id, payload); }
