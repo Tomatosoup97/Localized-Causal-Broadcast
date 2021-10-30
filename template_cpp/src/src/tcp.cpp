@@ -12,16 +12,13 @@
 #include "ts_queue.hpp"
 #include "udp.hpp"
 
-#define MAX_PACKET_WAIT_MS 100
-#define SENDING_CHUNK_SIZE (MILLION / 10)
-#define RETRANSMISSION_OFFSET_MS 200
-
 using namespace std::chrono;
 
 void receive_message(tcp_handler_t *tcp_handler) {
   int is_socket_ready;
   bool was_sent;
   ssize_t buff_size;
+  message_t *message;
 
   while ((is_socket_ready =
               select_socket(tcp_handler->sockfd, 0, MAX_PACKET_WAIT_MS))) {
@@ -34,11 +31,14 @@ void receive_message(tcp_handler_t *tcp_handler) {
     }
 
     if (!payload->is_ack) {
-      payload->is_ack = true;
-      node_t sender_node = (*tcp_handler->nodes)[get_node_idx_by_id(
+      node_t *sender_node = (*tcp_handler->nodes)[get_node_idx_by_id(
           tcp_handler->nodes, payload->sender_id)];
-      was_sent = send_udp_payload(tcp_handler->sockfd, &sender_node, payload,
-                                  buff_size);
+
+      message = new message_t;
+      message->recipient = sender_node;
+      message->payload = payload;
+      payload->is_ack = true;
+      tcp_handler->sending_queue->enqueue(message);
     }
 
     tcp_handler->delivered->insert(payload->sender_id, payload);
@@ -62,11 +62,16 @@ void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler) {
   while (!*tcp_handler->finito) {
 
     message_t *message = tcp_handler->sending_queue->dequeue();
+    message->payload->sender_id = tcp_handler->current_node->id;
+
+    if (DEBUG_V) std::cout << "Trying to send...\n";
     was_sent = send_udp_payload(tcp_handler->sockfd, message->recipient,
                                 message->payload, message->payload->buff_size);
+    if (DEBUG_V) std::cout << "Sent!\n";
 
     if (message->payload->is_ack) {
       // We no longer need it after ACK was sent
+      if (DEBUG_V) std::cout << "Sending ACK: freeing message...\n";
       free_message(message);
     } else {
       // Retransmitting
@@ -82,9 +87,11 @@ void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
     message_t *message = tcp_handler->retrans_queue->dequeue();
     uint32_t packet_uid = message->payload->packet_uid;
 
-    if (tcp_handler->delivered->contains(message->payload->sender_id,
+    if (tcp_handler->delivered->contains(message->recipient->id,
                                          message->payload)) {
       // already delivered - no need to retransmit
+      if (DEBUG_V) std::cout << "Retransmission: freeing message \n";
+      show_payload(message->payload);
       free_message(message);
       continue;
     }
@@ -119,10 +126,10 @@ void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
         (*enqueued_messages)++;
 
         payload = new payload_t;
+        construct_payload(payload, sender_node, *enqueued_messages);
+
         message = new message_t;
-        message->payload = payload;
-        message->recipient = receiver_node;
-        construct_message(message, sender_node, *enqueued_messages);
+        construct_message(message, payload, receiver_node);
 
         tcp_handler->sending_queue->enqueue(message);
       }
@@ -130,22 +137,27 @@ void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
   }
 }
 
-void construct_message(message_t *message, node_t *sender, uint32_t seq_num) {
-  std::string msg_content = std::to_string(seq_num);
-  message->payload->buffer = new char[msg_content.length()];
-
-  strcpy(message->payload->buffer, msg_content.c_str());
-  message->payload->packet_uid = seq_num;
-
-  message->payload->sender_id = sender->id;
-  message->payload->owner_id = sender->id;
-  message->payload->buff_size = msg_content.length();
-
+void construct_message(message_t *message, payload_t *payload,
+                       node_t *recipient) {
   message->first_send = true;
+  message->recipient = recipient;
+  message->payload = payload;
+}
+
+void construct_payload(payload_t *payload, node_t *sender, uint32_t seq_num) {
+  std::string msg_content = std::to_string(seq_num);
+
+  payload->buffer = new char[msg_content.length()];
+  strcpy(payload->buffer, msg_content.c_str());
+  payload->packet_uid = seq_num;
+
+  payload->sender_id = sender->id;
+  payload->owner_id = sender->id;
+  payload->buff_size = msg_content.length();
 
   if (DEBUG) {
     std::cout << "Constructed ";
-    show_payload(message->payload);
+    show_payload(payload);
   }
 }
 

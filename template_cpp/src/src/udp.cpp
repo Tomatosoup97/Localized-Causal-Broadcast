@@ -13,10 +13,10 @@
 #include "messages.hpp"
 #include "udp.hpp"
 
-size_t get_node_idx_by_id(std::vector<node_t> *nodes, uint32_t id) {
+size_t get_node_idx_by_id(std::vector<node_t *> *nodes, uint32_t id) {
   for (size_t index = 0; index < nodes->size(); ++index) {
-    node_t node = (*nodes)[index];
-    if (node.id == id) {
+    node_t *node = (*nodes)[index];
+    if (node->id == id) {
       return index;
     }
   }
@@ -31,18 +31,22 @@ bool send_udp_payload(int sockfd, node_t *receiver, payload_t *payload,
   encode_udp_payload(payload, buffer, size);
   ssize_t payload_size = PAYLOAD_META_SIZE + size;
 
+  if (DEBUG_V) std::cout << "Low level sending...\n";
   ssize_t message_len = send_udp_packet(sockfd, receiver, buffer, payload_size);
+  if (DEBUG_V) std::cout << "Low level sent!\n";
 
   if (message_len != payload_size) {
-    if (errno == ENOTCONN || errno == ENETUNREACH || errno == EHOSTUNREACH)
+    if (errno == ENOTCONN || errno == ENETUNREACH || errno == EHOSTUNREACH) {
       was_sent = false;
-    else
+    } else {
+      std::cout << "\nERRNO: " << errno << "\n";
       throw std::runtime_error("sendto error");
+    }
   }
 
   if (DEBUG) {
     if (was_sent) {
-      std::cout << "Sent ";
+      std::cout << "Sent to node " << receiver->id << " ";
       show_payload(payload);
     } else {
       std::cout << "Could not deliver the message!\n";
@@ -137,7 +141,9 @@ int bind_socket(unsigned short port) {
   int bind_res =
       bind(sockfd, reinterpret_cast<struct sockaddr *>(&server_address),
            sizeof(server_address));
-  if (bind_res < 0)
+  if (bind_res < 0) {
+    std::cout << "\nERRNO: " << errno << "\n";
     throw std::runtime_error("bind error");
+  }
   return sockfd;
 }

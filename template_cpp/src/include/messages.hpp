@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "common.hpp"
+#include "ts_queue.hpp"
 
 using namespace std::chrono; // noqa
 
@@ -28,6 +29,9 @@ typedef struct {
   bool is_ack = false;
   bool first_send = false;
 } message_t;
+
+typedef SafeQueue<message_t *> MessagesQueue;
+typedef SafeQueue<payload_t *> PayloadQueue;
 
 std::string buff_as_str(char *buffer, ssize_t size);
 

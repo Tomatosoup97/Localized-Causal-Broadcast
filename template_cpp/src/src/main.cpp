@@ -16,12 +16,12 @@
 
 #define DUMP_WHEN_ABOVE (MILLION / 2)
 #define DUMPING_CHUNK (MILLION / 10)
-#define RECEIVER_THREADS_COUNT 4
+#define RECEIVER_THREADS_COUNT 1
 
 uint32_t msgs_to_send_count;
 uint32_t enqueued_messages = 0;
 bool finito = false;
-node_t myself_node;
+node_t *myself_node;
 
 tcp_handler_t tcp_handler;
 
@@ -41,17 +41,21 @@ static void dump_to_output(uint32_t until_size = 0) {
 
   uint32_t zero = 0; // ensuring types match in max
   until_size = std::max(until_size, zero);
-  while (tcp_handler.received_queue->size() > until_size) {
-    payload_t *payload = tcp_handler.received_queue->dequeue();
 
-    // TODO
-    if (true) {
-      output_file << "d " << payload->sender_id << " "
-                  << buff_as_str(payload->buffer, payload->buff_size) << "\n";
-    } else {
-      output_file << "b " << buff_as_str(payload->buffer, payload->buff_size)
-                  << "\n";
-    }
+  while (tcp_handler.broadcasted_queue->size() > until_size) {
+    payload_t *payload = tcp_handler.broadcasted_queue->dequeue();
+
+    output_file << "b " << buff_as_str(payload->buffer, payload->buff_size)
+                << "\n";
+    delete payload->buffer;
+    delete payload;
+  }
+
+  while (tcp_handler.delivered->urb_deliverable->size() > until_size) {
+    payload_t *payload = tcp_handler.delivered->urb_deliverable->dequeue();
+
+    output_file << "d " << buff_as_str(payload->buffer, payload->buff_size)
+                << " " << payload->owner_id << "\n";
     delete payload->buffer;
     delete payload;
   }
@@ -61,9 +65,9 @@ static void dump_to_output(uint32_t until_size = 0) {
 
 static void keep_dumping_to_output() {
   while (!*tcp_handler.finito) {
-    uint32_t current_size = tcp_handler.received_queue->size();
+    uint32_t current_size = tcp_handler.delivered->urb_deliverable->size();
 
-    if (current_size > DUMP_WHEN_ABOVE) {
+    if (current_size > DUMP_WHEN_ABOVE && DUMP_TO_FILE) {
       dump_to_output(current_size - DUMPING_CHUNK);
     }
   }
@@ -94,13 +98,13 @@ int main(int argc, char **argv) {
   parser.parse();
 
   auto hosts = parser.hosts();
-  std::vector<node_t> nodes;
+  std::vector<node_t *> nodes;
 
   for (auto &host : hosts) {
-    node_t node;
-    node.id = host.id;
-    node.ip = host.ip;
-    node.port = host.port;
+    node_t *node = new node_t;
+    node->id = host.id;
+    node->ip = host.ip;
+    node->port = host.port;
     nodes.push_back(node);
   }
 
@@ -114,7 +118,7 @@ int main(int argc, char **argv) {
   std::ifstream configFile(parser.configPath());
   uint32_t receiver_id;
   bool should_send_messages = true;
-  node_t receiver_node;
+  node_t *receiver_node;
 
   configFile >> msgs_to_send_count;
 
@@ -131,17 +135,19 @@ int main(int argc, char **argv) {
 
   MessagesQueue sending_queue;
   MessagesQueue retrans_queue;
-  PayloadQueue received_queue;
-  DeliveredSet delivered = DeliveredSet(&myself_node, nodes.size());
+  PayloadQueue urb_deliverable;
+  PayloadQueue broadcasted_queue;
+  DeliveredSet delivered = DeliveredSet(myself_node, nodes.size());
+  delivered.urb_deliverable = &urb_deliverable;
 
-  tcp_handler.sockfd = bind_socket(myself_node.port);
+  tcp_handler.sockfd = bind_socket(myself_node->port);
   tcp_handler.finito = &finito;
-  tcp_handler.current_node = &myself_node;
+  tcp_handler.current_node = myself_node;
   tcp_handler.nodes = &nodes;
 
   tcp_handler.sending_queue = &sending_queue;
   tcp_handler.retrans_queue = &retrans_queue;
-  tcp_handler.received_queue = &received_queue;
+  tcp_handler.broadcasted_queue = &broadcasted_queue;
   tcp_handler.delivered = &delivered;
 
   if (DEBUG)
@@ -160,10 +166,15 @@ int main(int argc, char **argv) {
   std::thread sender_thread(keep_sending_messages_from_queue, &tcp_handler);
 
   // Spawn thread for enqueuing messages
-  if (PERFECT_LINKS_MODE && should_send_messages) {
-    enqueuer_thread =
-        std::thread(keep_enqueuing_messages, &tcp_handler, &myself_node,
-                    &receiver_node, &enqueued_messages, msgs_to_send_count);
+  if (PERFECT_LINKS_MODE) {
+    if (should_send_messages) {
+      enqueuer_thread =
+          std::thread(keep_enqueuing_messages, &tcp_handler, myself_node,
+                      receiver_node, &enqueued_messages, msgs_to_send_count);
+    }
+  } else {
+    enqueuer_thread = std::thread(broadcast_messages, &tcp_handler, myself_node,
+                                  &enqueued_messages, msgs_to_send_count);
   }
 
   // Spawn thread for retransmitting messages
@@ -176,10 +187,12 @@ int main(int argc, char **argv) {
     while (!all_delivered()) {
       std::this_thread::sleep_for(200ms);
     }
-    finito = true;
     if (DEBUG)
       std::cout << "\nAll done, no more messages to send! :)\n";
-    stop(0);
+    if (PERFECT_LINKS_MODE) {
+      finito = true;
+      stop(0);
+    }
   }
 
   // Join threads for receiving messages

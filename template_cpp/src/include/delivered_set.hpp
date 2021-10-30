@@ -37,6 +37,8 @@ private:
   }
 
 public:
+  PayloadQueue *urb_deliverable;
+
   DeliveredSet(node_t *current_node_in, size_t keys_in)
       : acked(), acked_counter(), mtx() {
     keys = static_cast<uint32_t>(keys_in);
@@ -61,11 +63,25 @@ public:
   }
 
   void insert(SenderID sender_id, payload_t *payload) {
-    std::lock_guard<std::mutex> lock(mtx);
+    payload_t *log_payload;
+    mtx.lock();
+    bool seen = contains_unsafe(sender_id, payload);
 
-    if (!contains_unsafe(sender_id, payload)) {
-      acked_counter[payload->owner_id][payload->packet_uid]++;
+    if (!seen) {
       acked[sender_id][payload->owner_id]->insert(payload->packet_uid);
+    }
+    mtx.unlock();
+
+    if (!seen) {
+      acked_counter[payload->owner_id][payload->packet_uid]++;
+      std::cout<< "Counter: " <<acked_counter[payload->owner_id][payload->packet_uid] << "\n";
+
+      if (can_urb_deliver(payload)) {
+
+        log_payload = new payload_t;
+        copy_payload(log_payload, payload);
+        urb_deliverable->enqueue(log_payload);
+      }
     }
 
     // TODO: rethink this optimalization later
@@ -91,7 +107,8 @@ public:
   }
 
   bool can_urb_deliver(payload_t *payload) {
-    return acked_counter[payload->owner_id][payload->packet_uid] > (keys / 2);
+    uint32_t current_counter = acked_counter[payload->owner_id][payload->packet_uid];
+    return (keys / 2) + 1 >= current_counter && current_counter > (keys / 2);
   }
 
   void mark_as_seen(payload_t *payload) { insert(current_node->id, payload); }
