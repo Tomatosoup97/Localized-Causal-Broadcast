@@ -11,18 +11,21 @@ std::string buff_as_str(char *buffer, ssize_t size) {
 }
 
 void encode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size) {
-  if (DEBUG_V) std::cout << "Encoding...\n";
+  if (DEBUG_V)
+    std::cout << "Encoding...\n";
   uint32_t encoded_packet_id =
       contract_pair(payload->owner_id, payload->packet_uid);
   memcpy(buffer, &encoded_packet_id, 4);
   memcpy(buffer + 4, &payload->sender_id, 4);
   memcpy(buffer + 8, &payload->is_ack, 1);
   memcpy(buffer + 9, payload->buffer, buff_size);
-  if (DEBUG_V) std::cout << "Encoded!\n";
+  if (DEBUG_V)
+    std::cout << "Encoded!\n";
 }
 
 void decode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size) {
-  if (DEBUG_V) std::cout << "Decoding...\n";
+  if (DEBUG_V)
+    std::cout << "Decoding...\n";
   memcpy(&payload->packet_uid, buffer, 4);
   memcpy(&payload->sender_id, buffer + 4, 4);
   memcpy(&payload->is_ack, buffer + 8, 1);
@@ -32,11 +35,13 @@ void decode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size) {
   auto decoded_packet_id = unfold_pair(payload->packet_uid);
   payload->owner_id = decoded_packet_id.first;
   payload->packet_uid = decoded_packet_id.second;
-  if (DEBUG_V) std::cout << "Decoded!\n";
+  if (DEBUG_V)
+    std::cout << "Decoded!\n";
 }
 
 void copy_payload(payload_t *dest, payload_t *source) {
-  if (DEBUG_V) std::cout << "Copying...\n";
+  if (DEBUG_V)
+    std::cout << "Copying...\n";
   dest->buffer = new char[source->buff_size];
   dest->buff_size = source->buff_size;
   dest->packet_uid = source->packet_uid;
@@ -44,7 +49,8 @@ void copy_payload(payload_t *dest, payload_t *source) {
   dest->owner_id = source->owner_id;
   dest->is_ack = source->is_ack;
   memcpy(dest->buffer, source->buffer, source->buff_size);
-  if (DEBUG_V) std::cout << "Copied!\n";
+  if (DEBUG_V)
+    std::cout << "Copied!\n";
 }
 
 void free_message(message_t *message) {

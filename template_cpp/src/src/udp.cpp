@@ -31,9 +31,11 @@ bool send_udp_payload(int sockfd, node_t *receiver, payload_t *payload,
   encode_udp_payload(payload, buffer, size);
   ssize_t payload_size = PAYLOAD_META_SIZE + size;
 
-  if (DEBUG_V) std::cout << "Low level sending...\n";
+  if (DEBUG_V)
+    std::cout << "Low level sending...\n";
   ssize_t message_len = send_udp_packet(sockfd, receiver, buffer, payload_size);
-  if (DEBUG_V) std::cout << "Low level sent!\n";
+  if (DEBUG_V)
+    std::cout << "Low level sent!\n";
 
   if (message_len != payload_size) {
     if (errno == ENOTCONN || errno == ENETUNREACH || errno == EHOSTUNREACH) {

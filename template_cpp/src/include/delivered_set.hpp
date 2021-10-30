@@ -106,7 +106,8 @@ public:
   }
 
   bool can_urb_deliver(payload_t *payload) {
-    uint32_t current_counter = acked_counter[payload->owner_id][payload->packet_uid];
+    uint32_t current_counter =
+        acked_counter[payload->owner_id][payload->packet_uid];
     return (keys / 2) + 1 >= current_counter && current_counter > (keys / 2);
   }
 

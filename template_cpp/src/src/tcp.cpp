@@ -67,14 +67,17 @@ void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler) {
     message_t *message = tcp_handler->sending_queue->dequeue();
     message->payload->sender_id = tcp_handler->current_node->id;
 
-    if (DEBUG_V) std::cout << "Trying to send...\n";
+    if (DEBUG_V)
+      std::cout << "Trying to send...\n";
     was_sent = send_udp_payload(tcp_handler->sockfd, message->recipient,
                                 message->payload, message->payload->buff_size);
-    if (DEBUG_V) std::cout << "Sent!\n";
+    if (DEBUG_V)
+      std::cout << "Sent!\n";
 
     if (message->payload->is_ack) {
       // We no longer need it after ACK was sent
-      if (DEBUG_V) std::cout << "Sending ACK: freeing message...\n";
+      if (DEBUG_V)
+        std::cout << "Sending ACK: freeing message...\n";
       free_message(message);
     } else {
       // Retransmitting
@@ -93,7 +96,8 @@ void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
     if (tcp_handler->delivered->contains(message->recipient->id,
                                          message->payload)) {
       // already delivered - no need to retransmit
-      if (DEBUG_V) std::cout << "Retransmission: freeing message \n";
+      if (DEBUG_V)
+        std::cout << "Retransmission: freeing message \n";
       show_payload(message->payload);
       free_message(message);
       continue;

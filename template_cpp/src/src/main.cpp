@@ -54,8 +54,8 @@ static void dump_to_output(uint32_t until_size = 0) {
   while (tcp_handler.delivered->urb_deliverable->size() > until_size) {
     payload_t *payload = tcp_handler.delivered->urb_deliverable->dequeue();
 
-    output_file << "d " << buff_as_str(payload->buffer, payload->buff_size)
-                << " " << payload->owner_id << "\n";
+    output_file << "d " << payload->owner_id << " "
+                << buff_as_str(payload->buffer, payload->buff_size) << "\n";
     delete payload->buffer;
     delete payload;
   }
