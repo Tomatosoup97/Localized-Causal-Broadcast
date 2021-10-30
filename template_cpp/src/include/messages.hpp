@@ -26,7 +26,6 @@ typedef struct {
   payload_t *payload;
   node_t *recipient;
   steady_clock::time_point sending_time;
-  bool is_ack = false;
   bool first_send = false;
 } message_t;
 

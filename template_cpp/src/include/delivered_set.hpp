@@ -74,7 +74,6 @@ public:
 
     if (!seen) {
       acked_counter[payload->owner_id][payload->packet_uid]++;
-      std::cout<< "Counter: " <<acked_counter[payload->owner_id][payload->packet_uid] << "\n";
 
       if (can_urb_deliver(payload)) {
 

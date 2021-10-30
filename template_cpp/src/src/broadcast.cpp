@@ -18,7 +18,6 @@ void best_effort_broadcast(tcp_handler_t *tcp_handler, payload_t *payload) {
     message->recipient = node;
     message->payload = broadcast_payload;
     tcp_handler->sending_queue->enqueue(message);
-    // TODO:  ensure message_t is freed
   }
 }
 

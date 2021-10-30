@@ -11,7 +11,7 @@
 
 #define MAX_PACKET_WAIT_MS 100
 #define SENDING_CHUNK_SIZE (MILLION / 10)
-#define RETRANSMISSION_OFFSET_MS 200
+#define RETRANSMISSION_OFFSET_MS 300
 
 using namespace std::chrono;
 

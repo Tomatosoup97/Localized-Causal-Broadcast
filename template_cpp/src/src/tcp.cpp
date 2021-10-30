@@ -34,10 +34,13 @@ void receive_message(tcp_handler_t *tcp_handler) {
       node_t *sender_node = (*tcp_handler->nodes)[get_node_idx_by_id(
           tcp_handler->nodes, payload->sender_id)];
 
+      payload_t *ack_payload = new payload_t;
+      copy_payload(ack_payload, payload);
+      ack_payload->is_ack = true;
+
       message = new message_t;
       message->recipient = sender_node;
-      message->payload = payload;
-      payload->is_ack = true;
+      message->payload = ack_payload;
       tcp_handler->sending_queue->enqueue(message);
     }
 
