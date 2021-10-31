@@ -61,6 +61,7 @@ private:
     hints.ai_flags |= AI_CANONNAME;
 
     if (getaddrinfo(host, NULL, &hints, &res) != 0) {
+      freeaddrinfo(res);
       throw std::runtime_error("Could not resolve host `" + std::string(host) +
                                "` to IP: " + std::string(std::strerror(errno)));
     }
@@ -72,6 +73,7 @@ private:
       case AF_INET:
         ptr = &(reinterpret_cast<struct sockaddr_in *>(res->ai_addr))->sin_addr;
         inet_ntop(res->ai_family, ptr, addrstr, 128);
+        freeaddrinfo(res);
         return inet_addr(addrstr);
         break;
       // case AF_INET6:
@@ -83,6 +85,7 @@ private:
       res = res->ai_next;
     }
 
+    freeaddrinfo(res);
     throw std::runtime_error("No host resolves to IPv4");
   }
 };

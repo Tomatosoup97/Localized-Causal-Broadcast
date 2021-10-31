@@ -21,8 +21,8 @@ void best_effort_broadcast(tcp_handler_t *tcp_handler, payload_t *payload) {
   }
 }
 
-void uniform_reliable_broadcast(tcp_handler_t *tcp_handler,
-                                payload_t *payload) {
+void uniform_reliable_broadcast(tcp_handler_t *tcp_handler, payload_t *payload,
+                                bool rebroadcast) {
   if (!tcp_handler->delivered->was_seen(payload)) {
     payload->sender_id = tcp_handler->current_node->id;
 
@@ -33,6 +33,9 @@ void uniform_reliable_broadcast(tcp_handler_t *tcp_handler,
 
     tcp_handler->delivered->mark_as_seen(payload);
     best_effort_broadcast(tcp_handler, payload);
+  }
+  if (rebroadcast) {
+    free_payload(payload);
   }
 }
 
@@ -55,7 +58,7 @@ void broadcast_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
 
         construct_payload(payload, sender_node, *enqueued_messages);
 
-        uniform_reliable_broadcast(tcp_handler, payload);
+        uniform_reliable_broadcast(tcp_handler, payload, false);
         tcp_handler->broadcasted_queue->enqueue(payload);
       }
     }

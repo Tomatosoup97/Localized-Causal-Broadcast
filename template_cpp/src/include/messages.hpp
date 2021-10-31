@@ -11,7 +11,7 @@
 
 using namespace std::chrono; // noqa
 
-#define PAYLOAD_META_SIZE 9
+#define PAYLOAD_META_SIZE 13
 
 typedef struct {
   ssize_t buff_size;
@@ -38,11 +38,9 @@ void encode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size);
 void decode_udp_payload(payload_t *payload, char *buffer, ssize_t buff_size);
 
 void copy_payload(payload_t *dest, payload_t *source);
+void free_payload(payload_t *payload);
 void free_message(message_t *message);
 
 void show_payload(payload_t *payload);
-
-uint32_t contract_pair(uint32_t k1, uint32_t k2);
-std::pair<uint32_t, uint32_t> unfold_pair(uint32_t p);
 
 #endif

@@ -26,7 +26,7 @@ void receive_message(tcp_handler_t *tcp_handler) {
     buff_size = receive_udp_payload(tcp_handler->sockfd, payload);
 
     if (buff_size < 0) {
-      delete payload;
+      free_payload(payload);
       continue;
     }
 
@@ -46,10 +46,7 @@ void receive_message(tcp_handler_t *tcp_handler) {
 
     tcp_handler->delivered->insert(payload->sender_id, payload);
 
-    // TODO: put that somewhere else
-    if (!PERFECT_LINKS_MODE) {
-      uniform_reliable_broadcast(tcp_handler, payload);
-    }
+    uniform_reliable_broadcast(tcp_handler, payload);
   }
 }
 
@@ -155,7 +152,7 @@ void construct_payload(payload_t *payload, node_t *sender, uint32_t seq_num) {
   std::string msg_content = std::to_string(seq_num);
 
   payload->buffer = new char[msg_content.length()];
-  strcpy(payload->buffer, msg_content.c_str());
+  strncpy(payload->buffer, msg_content.c_str(), msg_content.length());
   payload->packet_uid = seq_num;
 
   payload->sender_id = sender->id;

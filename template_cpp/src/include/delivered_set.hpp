@@ -71,12 +71,18 @@ public:
 
     if (!seen) {
       acked[sender_id][payload->owner_id]->insert(payload->packet_uid);
-      acked_counter[payload->owner_id][payload->packet_uid]++;
 
-      if (acked_counter[payload->owner_id][payload->packet_uid] == 1) {
-        log_payload = new payload_t;
-        copy_payload(log_payload, payload);
-        undelivered[payload->owner_id][payload->packet_uid] = log_payload;
+      if (payload->packet_uid < received_up_to[payload->owner_id]) {
+        return;
+      } else {
+
+        acked_counter[payload->owner_id][payload->packet_uid]++;
+
+        if (acked_counter[payload->owner_id][payload->packet_uid] == 1) {
+          log_payload = new payload_t;
+          copy_payload(log_payload, payload);
+          undelivered[payload->owner_id][payload->packet_uid] = log_payload;
+        }
       }
     }
 
@@ -88,6 +94,7 @@ public:
         log_payload = undelivered[payload->owner_id][packet_uid];
         urb_deliverable->enqueue(log_payload);
         undelivered[payload->owner_id].erase(packet_uid);
+        acked_counter[payload->owner_id].erase(packet_uid);
 
         received_up_to[payload->owner_id]++;
       }
@@ -100,6 +107,9 @@ public:
   }
 
   bool can_urb_deliver(uint32_t owner_id, uint32_t packet_uid) {
+    if (packet_uid < received_up_to[owner_id]) {
+      return true;
+    }
     return acked_counter[owner_id][packet_uid] > (keys / 2);
   }
 

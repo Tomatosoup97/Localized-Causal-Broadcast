@@ -15,7 +15,8 @@
 #include "udp.hpp"
 
 /* #define DUMP_WHEN_ABOVE (MILLION / 10) */
-#define DUMP_WHEN_ABOVE 1
+// TODO
+#define DUMP_WHEN_ABOVE 0
 #define DUMPING_CHUNK (MILLION / 10)
 #define RECEIVER_THREADS_COUNT 1
 
@@ -26,12 +27,29 @@ node_t *myself_node;
 
 tcp_handler_t tcp_handler;
 
+std::thread enqueuer_thread;
+std::thread retransmiter_thread;
+std::thread writer_thread;
+std::thread sender_thread;
+std::thread receiver_thread_pool[RECEIVER_THREADS_COUNT];
+
 const char *output_path;
 
 static bool all_delivered() {
   return enqueued_messages >= msgs_to_send_count &&
          tcp_handler.sending_queue->size() == 0 &&
          tcp_handler.retrans_queue->size() == 0;
+}
+
+static void join_threads() {
+  for (int i = 0; i < RECEIVER_THREADS_COUNT; i++) {
+    receiver_thread_pool[i].join();
+  }
+
+  sender_thread.join();
+  retransmiter_thread.join();
+  writer_thread.join();
+  enqueuer_thread.join();
 }
 
 static void dump_to_output(uint32_t until_size = 0) {
@@ -48,8 +66,7 @@ static void dump_to_output(uint32_t until_size = 0) {
 
     output_file << "b " << buff_as_str(payload->buffer, payload->buff_size)
                 << "\n";
-    delete payload->buffer;
-    delete payload;
+    free_payload(payload);
   }
 
   while (tcp_handler.delivered->urb_deliverable->size() > until_size) {
@@ -57,8 +74,7 @@ static void dump_to_output(uint32_t until_size = 0) {
 
     output_file << "d " << payload->owner_id << " "
                 << buff_as_str(payload->buffer, payload->buff_size) << "\n";
-    delete payload->buffer;
-    delete payload;
+    free_payload(payload);
   }
 
   output_file.close();
@@ -85,8 +101,16 @@ static void stop(int) {
   signal(SIGTERM, SIG_DFL);
   signal(SIGINT, SIG_DFL);
 
+  join_threads();
+
   if (DUMP_TO_FILE)
     dump_to_output();
+
+  for (size_t index = 0; index < tcp_handler.nodes->size(); ++index) {
+    node_t *node = (*tcp_handler.nodes)[index];
+    delete node;
+  }
+
   exit(0);
 }
 
@@ -160,9 +184,6 @@ int main(int argc, char **argv) {
   if (DEBUG)
     std::cout << "Spawning threads...\n";
 
-  std::thread enqueuer_thread;
-  std::thread receiver_thread_pool[RECEIVER_THREADS_COUNT];
-
   // Spawn threads for receiving messages
   for (int i = 0; i < RECEIVER_THREADS_COUNT; i++) {
     receiver_thread_pool[i] =
@@ -170,7 +191,7 @@ int main(int argc, char **argv) {
   }
 
   // Spawn thread for sending messages
-  std::thread sender_thread(keep_sending_messages_from_queue, &tcp_handler);
+  sender_thread = std::thread(keep_sending_messages_from_queue, &tcp_handler);
 
   // Spawn thread for enqueuing messages
   if (PERFECT_LINKS_MODE) {
@@ -185,10 +206,10 @@ int main(int argc, char **argv) {
   }
 
   // Spawn thread for retransmitting messages
-  std::thread retransmiter_thread(keep_retransmitting_messages, &tcp_handler);
+  retransmiter_thread = std::thread(keep_retransmitting_messages, &tcp_handler);
 
   // Spawn thread for dumping messages
-  std::thread writer_thread(keep_dumping_to_output);
+  writer_thread = std::thread(keep_dumping_to_output);
 
   if (!KEEP_ALIVE) {
     while (!all_delivered()) {
@@ -201,16 +222,6 @@ int main(int argc, char **argv) {
       stop(0);
     }
   }
-
-  // Join threads for receiving messages
-  for (int i = 0; i < RECEIVER_THREADS_COUNT; i++) {
-    receiver_thread_pool[i].join();
-  }
-
-  sender_thread.join();
-  enqueuer_thread.join();
-  retransmiter_thread.join();
-  writer_thread.join();
 
   stop(0);
   return 0;
