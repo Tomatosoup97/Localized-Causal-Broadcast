@@ -84,8 +84,6 @@ public:
       while (can_urb_deliver(payload->owner_id,
                              received_up_to[payload->owner_id])) {
         uint32_t packet_uid = received_up_to[payload->owner_id];
-        // TODO rethink this
-        /* s[sender_id]->erase(received_up_to[sender_id]); */
 
         log_payload = undelivered[payload->owner_id][packet_uid];
         urb_deliverable->enqueue(log_payload);
@@ -97,12 +95,6 @@ public:
   }
 
   bool contains(SenderID sender_id, payload_t *payload) {
-    // TODO: rethink this optimalization later
-    /*
-    if (payload->packet_uid < received_up_to[sender_id]) {
-      return true;
-    }
-    */
     std::lock_guard<std::mutex> lock(mtx);
     return contains_unsafe(sender_id, payload);
   }

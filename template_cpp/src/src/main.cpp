@@ -14,7 +14,8 @@
 #include "tcp.hpp"
 #include "udp.hpp"
 
-#define DUMP_WHEN_ABOVE (MILLION / 2)
+/* #define DUMP_WHEN_ABOVE (MILLION / 10) */
+#define DUMP_WHEN_ABOVE 1
 #define DUMPING_CHUNK (MILLION / 10)
 #define RECEIVER_THREADS_COUNT 1
 
@@ -35,7 +36,7 @@ static bool all_delivered() {
 
 static void dump_to_output(uint32_t until_size = 0) {
   if (DEBUG)
-    std::cout << "Dumping to file...\n";
+    std::cout << " Dumping to file...\n";
 
   std::ofstream output_file(output_path, std::ios_base::app);
 
@@ -67,8 +68,14 @@ static void keep_dumping_to_output() {
   while (!*tcp_handler.finito) {
     uint32_t current_size = tcp_handler.delivered->urb_deliverable->size();
 
-    if (current_size > DUMP_WHEN_ABOVE && DUMP_TO_FILE) {
-      dump_to_output(current_size - DUMPING_CHUNK);
+    uint32_t until_size = current_size - DUMPING_CHUNK;
+
+    if (until_size > current_size) {
+      until_size = 0;
+    }
+
+    if ((current_size > DUMP_WHEN_ABOVE) && DUMP_TO_FILE) {
+      dump_to_output(until_size);
     }
   }
 }
