@@ -3,6 +3,7 @@
 
 #include <utility>
 #include <vector>
+#include <atomic>
 
 #include "common.hpp"
 #include "delivered_set.hpp"
@@ -17,7 +18,7 @@ using namespace std::chrono;
 
 typedef struct {
   int sockfd;
-  bool *finito;
+  std::atomic<bool> *finito;
   node_t *current_node;
   std::vector<node_t *> *nodes;
   DeliveredSet *delivered;

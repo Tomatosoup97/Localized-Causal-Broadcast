@@ -45,7 +45,7 @@ void broadcast_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
   payload_t *payload;
   payload_t *log_payload;
 
-  while (*enqueued_messages < msgs_to_send_count) {
+  while (*enqueued_messages < msgs_to_send_count && (!*tcp_handler->finito)) {
     if (tcp_handler->sending_queue->size() < SENDING_CHUNK_SIZE) {
 
       uint32_t enqueue_until = std::min(

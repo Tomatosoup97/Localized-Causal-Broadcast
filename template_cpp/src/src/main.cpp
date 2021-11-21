@@ -5,6 +5,7 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <thread>
+#include <atomic>
 
 #include "broadcast.hpp"
 #include "common.hpp"
@@ -20,7 +21,7 @@
 
 uint32_t msgs_to_send_count;
 uint32_t enqueued_messages = 0;
-bool finito = false;
+std::atomic<bool> finito = false;
 node_t *myself_node;
 
 tcp_handler_t tcp_handler;
@@ -52,7 +53,7 @@ static void join_threads() {
 
 static void dump_to_output(uint32_t until_size = 0) {
   if (DEBUG)
-    std::cout << " Dumping to file...\n";
+    std::cout << "Dumping to file...\n";
 
   std::ofstream output_file(output_path, std::ios_base::app);
 
@@ -99,6 +100,8 @@ static void stop(int) {
 
   if (DEBUG)
     std::cout << "Stopping...\n";
+
+  finito = true;
 
   signal(SIGTERM, SIG_DFL);
   signal(SIGINT, SIG_DFL);
