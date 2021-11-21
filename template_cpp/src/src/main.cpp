@@ -14,9 +14,7 @@
 #include "tcp.hpp"
 #include "udp.hpp"
 
-/* #define DUMP_WHEN_ABOVE (MILLION / 10) */
-// TODO
-#define DUMP_WHEN_ABOVE 0
+#define DUMP_WHEN_ABOVE (MILLION / 5)
 #define DUMPING_CHUNK (MILLION / 10)
 #define RECEIVER_THREADS_COUNT 1
 
@@ -98,13 +96,26 @@ static void keep_dumping_to_output() {
 
 static void stop(int) {
   // reset signal handlers to default
+
+  if (DEBUG)
+    std::cout << "Stopping...\n";
+
   signal(SIGTERM, SIG_DFL);
   signal(SIGINT, SIG_DFL);
 
-  join_threads();
+  if (DEBUG)
+    std::cout << "Dumping...\n";
 
   if (DUMP_TO_FILE)
     dump_to_output();
+
+  if (DEBUG)
+    std::cout << "Joining...\n";
+
+  join_threads();
+
+  if (DEBUG)
+    std::cout << "Releasing memory...\n";
 
   for (size_t index = 0; index < tcp_handler.nodes->size(); ++index) {
     node_t *node = (*tcp_handler.nodes)[index];
@@ -223,6 +234,6 @@ int main(int argc, char **argv) {
     }
   }
 
-  stop(0);
+  join_threads();
   return 0;
 }

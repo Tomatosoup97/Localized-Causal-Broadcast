@@ -7,7 +7,6 @@
 #include <queue>
 
 template <class T> class SafeQueue {
-
 private:
   std::queue<T> q;
   mutable std::mutex mtx;
