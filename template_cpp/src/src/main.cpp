@@ -1,11 +1,11 @@
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <signal.h>
 #include <sys/types.h>
 #include <thread>
-#include <atomic>
 
 #include "broadcast.hpp"
 #include "common.hpp"

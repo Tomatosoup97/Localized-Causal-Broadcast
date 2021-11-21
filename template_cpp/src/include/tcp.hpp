@@ -1,9 +1,9 @@
 #ifndef _TCP_H_
 #define _TCP_H_
 
+#include <atomic>
 #include <utility>
 #include <vector>
-#include <atomic>
 
 #include "common.hpp"
 #include "delivered_set.hpp"
