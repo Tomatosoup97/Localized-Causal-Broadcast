@@ -15,6 +15,7 @@
 #include "tcp.hpp"
 #include "udp.hpp"
 
+/* #define DUMP_WHEN_ABOVE 0 */
 #define DUMP_WHEN_ABOVE (MILLION / 5)
 #define DUMPING_CHUNK (MILLION / 10)
 #define RECEIVER_THREADS_COUNT 1

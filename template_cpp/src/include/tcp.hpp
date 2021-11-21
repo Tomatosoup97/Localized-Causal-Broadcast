@@ -27,8 +27,6 @@ typedef struct {
   PayloadQueue *broadcasted_queue;
 } tcp_handler_t;
 
-void receive_message(tcp_handler_t *tcp_handler);
-
 void keep_receiving_messages(tcp_handler_t *tcp_handler);
 
 void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler);

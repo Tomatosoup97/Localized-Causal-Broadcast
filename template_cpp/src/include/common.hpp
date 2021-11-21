@@ -11,7 +11,7 @@
 #include <sys/types.h>
 
 // Program flags
-#define DEBUG 1
+#define DEBUG 0
 #define DEBUG_V 0
 #define KEEP_ALIVE 1
 #define DUMP_TO_FILE 1

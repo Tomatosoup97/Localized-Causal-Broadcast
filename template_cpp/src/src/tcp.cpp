@@ -14,46 +14,43 @@
 
 using namespace std::chrono;
 
-void receive_message(tcp_handler_t *tcp_handler) {
-  int is_socket_ready;
-  bool was_sent;
+void keep_receiving_messages(tcp_handler_t *tcp_handler) {
+  bool should_alloc = true;
   ssize_t buff_size;
   message_t *message;
-
-  while ((is_socket_ready =
-              select_socket(tcp_handler->sockfd, 0, MAX_PACKET_WAIT_MS))) {
-    payload_t *payload = new payload_t;
-    buff_size = receive_udp_payload(tcp_handler->sockfd, payload);
-
-    if (buff_size < 0) {
-      free_payload(payload);
-      continue;
-    }
-
-    if (!payload->is_ack) {
-      node_t *sender_node = (*tcp_handler->nodes)[get_node_idx_by_id(
-          tcp_handler->nodes, payload->sender_id)];
-
-      payload_t *ack_payload = new payload_t;
-      copy_payload(ack_payload, payload);
-      ack_payload->is_ack = true;
-
-      message = new message_t;
-      message->recipient = sender_node;
-      message->payload = ack_payload;
-      tcp_handler->sending_queue->enqueue(message);
-    }
-
-    tcp_handler->delivered->insert(payload->sender_id, payload);
-
-    uniform_reliable_broadcast(tcp_handler, payload);
-  }
-}
-
-void keep_receiving_messages(tcp_handler_t *tcp_handler) {
+  payload_t *payload;
 
   while (!*tcp_handler->finito)
-    receive_message(tcp_handler);
+    if (select_socket(tcp_handler->sockfd, 0, MAX_PACKET_WAIT_MS)) {
+
+      if (should_alloc)
+        payload = new payload_t;
+
+      buff_size = receive_udp_payload(tcp_handler->sockfd, payload);
+
+      bool should_alloc = buff_size < 0;
+      if (buff_size < 0) {
+        continue;
+      }
+
+      if (!payload->is_ack) {
+        node_t *sender_node = (*tcp_handler->nodes)[get_node_idx_by_id(
+            tcp_handler->nodes, payload->sender_id)];
+
+        payload_t *ack_payload = new payload_t;
+        copy_payload(ack_payload, payload);
+        ack_payload->is_ack = true;
+
+        message = new message_t;
+        message->recipient = sender_node;
+        message->payload = ack_payload;
+        tcp_handler->sending_queue->enqueue(message);
+      }
+
+      tcp_handler->delivered->insert(payload->sender_id, payload);
+
+      uniform_reliable_broadcast(tcp_handler, payload);
+    }
 }
 
 void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler) {
