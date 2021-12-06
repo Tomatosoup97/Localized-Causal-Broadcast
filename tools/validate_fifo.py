@@ -16,6 +16,8 @@ def check_positive(value):
 
 
 def checkNextMessages(nextMessage, m, filePath):
+    if m == 0:
+        return True
     for proc, next_msg in nextMessage.items():
         msgs = next_msg - 1
         if msgs != m:
@@ -81,7 +83,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-m",
         required=True,
-        type=check_positive,
+        type=int,
         dest="m",
         help="Total number of messages",
     )
