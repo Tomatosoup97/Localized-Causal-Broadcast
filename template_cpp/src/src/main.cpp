@@ -3,6 +3,7 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <signal.h>
 #include <sys/types.h>
 #include <thread>
@@ -161,16 +162,40 @@ int main(int argc, char **argv) {
   bool should_send_messages = true;
   node_t *receiver_node;
 
+  MessagesQueue sending_queue;
+  MessagesQueue retrans_queue;
+  PayloadQueue urb_deliverable;
+  PayloadQueue broadcasted_queue;
+  CausalityMap causality;
+
   configFile >> msgs_to_send_count;
+
+  std::string line;
+  std::istringstream iss;
+  uint32_t enter_number;
+
+  // burn empty line with \n character
+  getline(configFile, line);
+
+  for (auto &node : nodes) {
+    getline(configFile, line);
+    iss = std::istringstream(line);
+
+    if (DEBUG)
+      std::cout << "\nLine: " << line << "\n" << "Node: " << node->id;
+
+    while (iss >> enter_number) {
+        causality[node->id].push_back(enter_number);
+        if (DEBUG)
+        std::cout << ", num: " << enter_number;
+    }
+  }
+
   configFile.close();
 
   myself_node =
       nodes[get_node_idx_by_id(&nodes, static_cast<uint32_t>(parser.id()))];
 
-  MessagesQueue sending_queue;
-  MessagesQueue retrans_queue;
-  PayloadQueue urb_deliverable;
-  PayloadQueue broadcasted_queue;
   DeliveredSet delivered = DeliveredSet(myself_node, nodes.size());
   delivered.urb_deliverable = &urb_deliverable;
 
@@ -183,6 +208,7 @@ int main(int argc, char **argv) {
   tcp_handler.retrans_queue = &retrans_queue;
   tcp_handler.broadcasted_queue = &broadcasted_queue;
   tcp_handler.delivered = &delivered;
+  tcp_handler.causality = &causality;
 
   if (DEBUG)
     std::cout << "Spawning threads...\n";

@@ -16,6 +16,8 @@
 
 using namespace std::chrono;
 
+typedef Map<SenderID, std::vector<uint32_t>> CausalityMap;
+
 typedef struct {
   int sockfd;
   std::atomic<bool> *finito;
@@ -25,6 +27,7 @@ typedef struct {
   MessagesQueue *sending_queue;
   MessagesQueue *retrans_queue;
   PayloadQueue *broadcasted_queue;
+  CausalityMap *causality;
 } tcp_handler_t;
 
 void keep_receiving_messages(tcp_handler_t *tcp_handler);
