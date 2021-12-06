@@ -15,7 +15,6 @@
 #define DEBUG_V 0
 #define KEEP_ALIVE 1
 #define DUMP_TO_FILE 1
-#define PERFECT_LINKS_MODE 0
 #define MILLION 1000000
 
 #define IP_MAXPACKET 65535

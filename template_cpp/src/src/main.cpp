@@ -15,7 +15,6 @@
 #include "tcp.hpp"
 #include "udp.hpp"
 
-/* #define DUMP_WHEN_ABOVE 0 */
 #define DUMP_WHEN_ABOVE (MILLION / 5)
 #define DUMPING_CHUNK (MILLION / 10)
 #define RECEIVER_THREADS_COUNT 1
@@ -133,10 +132,6 @@ int main(int argc, char **argv) {
   signal(SIGTERM, stop);
   signal(SIGINT, stop);
 
-  // `true` means that a config file is required.
-  // Call with `false` if no config file is necessary.
-  bool requireConfig = true;
-
   if (DEBUG)
     std::cout << "Initializing...\n";
 
@@ -167,13 +162,6 @@ int main(int argc, char **argv) {
   node_t *receiver_node;
 
   configFile >> msgs_to_send_count;
-
-  if (PERFECT_LINKS_MODE) {
-    configFile >> receiver_id;
-    receiver_node = nodes[get_node_idx_by_id(&nodes, receiver_id)];
-    should_send_messages = receiver_id != parser.id();
-  }
-
   configFile.close();
 
   myself_node =
@@ -209,16 +197,8 @@ int main(int argc, char **argv) {
   sender_thread = std::thread(keep_sending_messages_from_queue, &tcp_handler);
 
   // Spawn thread for enqueuing messages
-  if (PERFECT_LINKS_MODE) {
-    if (should_send_messages) {
-      enqueuer_thread =
-          std::thread(keep_enqueuing_messages, &tcp_handler, myself_node,
-                      receiver_node, &enqueued_messages, msgs_to_send_count);
-    }
-  } else {
-    enqueuer_thread = std::thread(broadcast_messages, &tcp_handler, myself_node,
-                                  &enqueued_messages, msgs_to_send_count);
-  }
+  enqueuer_thread = std::thread(broadcast_messages, &tcp_handler, myself_node,
+                                &enqueued_messages, msgs_to_send_count);
 
   // Spawn thread for retransmitting messages
   retransmiter_thread = std::thread(keep_retransmitting_messages, &tcp_handler);
@@ -232,10 +212,6 @@ int main(int argc, char **argv) {
     }
     if (DEBUG)
       std::cout << "\nAll done, no more messages to send! :)\n";
-    if (PERFECT_LINKS_MODE) {
-      finito = true;
-      stop(0);
-    }
   }
 
   join_threads();
