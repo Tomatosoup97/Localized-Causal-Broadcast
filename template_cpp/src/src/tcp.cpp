@@ -110,34 +110,6 @@ void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
   }
 }
 
-void keep_enqueuing_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
-                             node_t *receiver_node, uint32_t *enqueued_messages,
-                             uint32_t msgs_to_send_count) {
-  payload_t *payload;
-  message_t *message;
-  node_t *recipient;
-
-  while (*enqueued_messages < msgs_to_send_count) {
-    if (tcp_handler->sending_queue->size() < SENDING_CHUNK_SIZE) {
-
-      uint32_t enqueue_until =
-          std::min(*enqueued_messages + SENDING_CHUNK_SIZE, msgs_to_send_count);
-
-      while (*enqueued_messages < enqueue_until) {
-        (*enqueued_messages)++;
-
-        payload = new payload_t;
-        construct_payload(payload, sender_node, *enqueued_messages);
-
-        message = new message_t;
-        construct_message(message, payload, receiver_node);
-
-        tcp_handler->sending_queue->enqueue(message);
-      }
-    }
-  }
-}
-
 void construct_message(message_t *message, payload_t *payload,
                        node_t *recipient) {
   message->first_send = true;
