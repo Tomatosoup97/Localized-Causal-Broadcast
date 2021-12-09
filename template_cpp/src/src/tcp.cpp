@@ -41,13 +41,11 @@ void keep_receiving_messages(tcp_handler_t *tcp_handler) {
         node_t *sender_node = (*tcp_handler->nodes)[get_node_idx_by_id(
             tcp_handler->nodes, payload->sender_id)];
 
-        show_payload(payload, tcp_handler);
         payload_t *ack_payload = new payload_t;
 
         uint32_t vc_size = vector_clock_size(tcp_handler);
         copy_payload(ack_payload, payload, vc_size);
         ack_payload->is_ack = true;
-        show_payload(ack_payload, tcp_handler);
 
         message = new message_t;
         message->recipient = sender_node;
@@ -68,8 +66,6 @@ void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler) {
 
     message_t *message = tcp_handler->sending_queue->dequeue();
     message->payload->sender_id = tcp_handler->current_node->id;
-
-    show_payload(message->payload, tcp_handler);
 
     if (DEBUG_V)
       std::cout << "Trying to send...\n";

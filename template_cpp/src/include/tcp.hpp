@@ -54,11 +54,13 @@ inline uint32_t vector_clock_size(tcp_handler_t *h) {
 }
 
 inline void show_vector_clock(uint32_t *vector_clock, uint32_t vc_size) {
-  std::cout << "Vector clock: ";
-  for (uint32_t i = 0; i < vc_size; i++) {
-    std::cout << vector_clock[i] << " ";
+  if (DEBUG) {
+    std::cout << "Vector clock: ";
+    for (uint32_t i = 0; i < vc_size; i++) {
+      std::cout << vector_clock[i] << " ";
+    }
+    std::cout << "\n";
   }
-  std::cout << "\n";
 }
 
 #endif

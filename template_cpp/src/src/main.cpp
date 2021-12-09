@@ -168,6 +168,7 @@ int main(int argc, char **argv) {
   PayloadQueue deliverable;
   PayloadQueue broadcasted_queue;
   CausalityMap causality;
+  CausalityMap reverse_causality;
 
   configFile >> msgs_to_send_count;
 
@@ -188,10 +189,12 @@ int main(int argc, char **argv) {
 
     while (iss >> enter_number) {
       causality[node->id].push_back(enter_number);
+      reverse_causality[enter_number].push_back(node->id);
       if (DEBUG)
         std::cout << ", num: " << enter_number;
     }
-    std::cout << "\n";
+    if (DEBUG)
+      std::cout << "\n";
   }
 
   configFile.close();
@@ -202,6 +205,7 @@ int main(int argc, char **argv) {
   DeliveredSet delivered = DeliveredSet(myself_node, nodes.size());
   delivered.deliverable = &deliverable;
   delivered.causality = &causality;
+  delivered.reverse_causality = &reverse_causality;
 
   tcp_handler.sockfd = bind_socket(myself_node->port);
   tcp_handler.finito = &finito;

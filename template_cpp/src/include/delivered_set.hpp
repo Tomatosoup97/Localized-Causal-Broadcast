@@ -44,6 +44,7 @@ public:
   PayloadQueue *deliverable;
   uint32_t *vector_clock;
   CausalityMap *causality;
+  CausalityMap *reverse_causality;
 
   DeliveredSet(node_t *current_node_in, size_t keys_in)
       : acked(), acked_counter(), undelivered(), mtx(), received_mtx() {
@@ -94,16 +95,19 @@ public:
     }
 
     if (received_up_to[payload->owner_id] == payload->packet_uid) {
-      while (can_urb_deliver(payload->owner_id,
-                             received_up_to[payload->owner_id])) {
-        uint32_t packet_uid = received_up_to[payload->owner_id];
+      for (uint32_t affected_node_id : (*causality)[payload->owner_id]) {
+        while (can_lcb_deliver(payload->vector_clock,
+                               affected_node_id)) {
+          uint32_t packet_uid = received_up_to[affected_node_id];
 
-        log_payload = undelivered[payload->owner_id][packet_uid];
-        deliverable->enqueue(log_payload);
-        undelivered[payload->owner_id].erase(packet_uid);
-        acked_counter[payload->owner_id].erase(packet_uid);
+          log_payload = undelivered[affected_node_id][packet_uid];
+          deliverable->enqueue(log_payload);
+          undelivered[affected_node_id].erase(packet_uid);
+          acked_counter[affected_node_id].erase(packet_uid);
 
-        received_up_to[payload->owner_id]++;
+          received_up_to[affected_node_id]++;
+          vector_clock[affected_node_id]++;
+        }
       }
     }
   }
@@ -111,6 +115,19 @@ public:
   bool contains(SenderID sender_id, payload_t *payload) {
     std::lock_guard<std::mutex> lock(mtx);
     return contains_unsafe(sender_id, payload);
+  }
+
+  bool can_lcb_deliver(uint32_t *recv_vector_clock, uint32_t node_id) {
+    bool lcb_happy = true;
+    for (uint32_t dependency : (*causality)[node_id]) {
+      // TODO: VC on left side
+      if (vector_clock[dependency] < recv_vector_clock[dependency]) {
+        lcb_happy = false;
+        break;
+      }
+    }
+    bool urb_happy = can_urb_deliver(node_id, received_up_to[node_id]);
+    return lcb_happy && urb_happy;
   }
 
   bool can_urb_deliver(uint32_t owner_id, uint32_t packet_uid) {
