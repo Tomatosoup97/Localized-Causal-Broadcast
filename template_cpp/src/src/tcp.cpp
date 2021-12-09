@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cassert>
 #include <chrono>
 #include <iostream>
 #include <sys/types.h>
@@ -11,6 +12,8 @@
 #include "tcp.hpp"
 #include "ts_queue.hpp"
 #include "udp.hpp"
+
+#undef NDEBUG
 
 using namespace std::chrono;
 
@@ -26,7 +29,8 @@ void keep_receiving_messages(tcp_handler_t *tcp_handler) {
       if (should_alloc)
         payload = new payload_t;
 
-      buff_size = receive_udp_payload(tcp_handler->sockfd, payload);
+      buff_size =
+          receive_udp_payload(tcp_handler, tcp_handler->sockfd, payload);
 
       bool should_alloc = buff_size < 0;
       if (buff_size < 0) {
@@ -37,9 +41,13 @@ void keep_receiving_messages(tcp_handler_t *tcp_handler) {
         node_t *sender_node = (*tcp_handler->nodes)[get_node_idx_by_id(
             tcp_handler->nodes, payload->sender_id)];
 
+        show_payload(payload, tcp_handler);
         payload_t *ack_payload = new payload_t;
-        copy_payload(ack_payload, payload);
+
+        uint32_t vc_size = vector_clock_size(tcp_handler);
+        copy_payload(ack_payload, payload, vc_size);
         ack_payload->is_ack = true;
+        show_payload(ack_payload, tcp_handler);
 
         message = new message_t;
         message->recipient = sender_node;
@@ -61,10 +69,13 @@ void keep_sending_messages_from_queue(tcp_handler_t *tcp_handler) {
     message_t *message = tcp_handler->sending_queue->dequeue();
     message->payload->sender_id = tcp_handler->current_node->id;
 
+    show_payload(message->payload, tcp_handler);
+
     if (DEBUG_V)
       std::cout << "Trying to send...\n";
-    was_sent = send_udp_payload(tcp_handler->sockfd, message->recipient,
-                                message->payload, message->payload->buff_size);
+    was_sent =
+        send_udp_payload(tcp_handler, tcp_handler->sockfd, message->recipient,
+                         message->payload, message->payload->buff_size);
     if (DEBUG_V)
       std::cout << "Sent!\n";
 
@@ -92,14 +103,14 @@ void keep_retransmitting_messages(tcp_handler_t *tcp_handler) {
       // already delivered - no need to retransmit
       if (DEBUG_V)
         std::cout << "Retransmission: freeing message \n";
-      show_payload(message->payload);
+      show_payload(message->payload, tcp_handler);
       free_message(message);
       continue;
     }
 
     if (DEBUG) {
       std::cout << "Retransmitting: ";
-      show_payload(message->payload);
+      show_payload(message->payload, tcp_handler);
     }
 
     while (!should_start_retransmission(message->sending_time)) {
@@ -117,7 +128,8 @@ void construct_message(message_t *message, payload_t *payload,
   message->payload = payload;
 }
 
-void construct_payload(payload_t *payload, node_t *sender, uint32_t seq_num) {
+void construct_payload(tcp_handler_t *h, payload_t *payload, node_t *sender,
+                       uint32_t seq_num) {
   std::string msg_content = std::to_string(seq_num);
 
   payload->buffer = new char[msg_content.length()];
@@ -128,9 +140,13 @@ void construct_payload(payload_t *payload, node_t *sender, uint32_t seq_num) {
   payload->owner_id = sender->id;
   payload->buff_size = msg_content.length();
 
+  uint32_t vc_size = vector_clock_size(h);
+  payload->vector_clock = new uint32_t[vc_size];
+  memcpy(payload->vector_clock, h->delivered->vector_clock, 4 * vc_size);
+
   if (DEBUG) {
     std::cout << "Constructed ";
-    show_payload(payload);
+    show_payload(payload, h);
   }
 }
 

@@ -18,6 +18,8 @@ typedef uint32_t PacketID;
 template <typename A, typename B> using Map = std::unordered_map<A, B>;
 template <typename A> using Set = std::unordered_set<A>;
 
+typedef Map<SenderID, std::vector<uint32_t>> CausalityMap;
+
 class DeliveredSet {
 
 private:
@@ -39,12 +41,15 @@ private:
   }
 
 public:
-  PayloadQueue *urb_deliverable;
+  PayloadQueue *deliverable;
+  uint32_t *vector_clock;
+  CausalityMap *causality;
 
   DeliveredSet(node_t *current_node_in, size_t keys_in)
       : acked(), acked_counter(), undelivered(), mtx(), received_mtx() {
     keys = static_cast<uint32_t>(keys_in);
     current_node = current_node_in;
+    vector_clock = new uint32_t[keys + 1];
 
     for (uint32_t sender_id = 0; sender_id <= keys; sender_id++) {
       for (uint32_t owner_id = 0; owner_id <= keys; owner_id++) {
@@ -53,6 +58,7 @@ public:
         acked[sender_id][owner_id] = packets;
       }
       received_up_to[sender_id] = 1;
+      vector_clock[sender_id] = 0;
     }
   }
 
@@ -62,6 +68,7 @@ public:
         delete acked[sender_id][owner_id];
       }
     }
+    delete[] vector_clock;
   }
 
   void insert(SenderID sender_id, payload_t *payload) {
@@ -80,7 +87,7 @@ public:
 
         if (acked_counter[payload->owner_id][payload->packet_uid] == 1) {
           log_payload = new payload_t;
-          copy_payload(log_payload, payload);
+          copy_payload(log_payload, payload, keys);
           undelivered[payload->owner_id][payload->packet_uid] = log_payload;
         }
       }
@@ -92,7 +99,7 @@ public:
         uint32_t packet_uid = received_up_to[payload->owner_id];
 
         log_payload = undelivered[payload->owner_id][packet_uid];
-        urb_deliverable->enqueue(log_payload);
+        deliverable->enqueue(log_payload);
         undelivered[payload->owner_id].erase(packet_uid);
         acked_counter[payload->owner_id].erase(packet_uid);
 

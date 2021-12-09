@@ -3,8 +3,8 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
-#include <sstream>
 #include <signal.h>
+#include <sstream>
 #include <sys/types.h>
 #include <thread>
 
@@ -16,7 +16,8 @@
 #include "tcp.hpp"
 #include "udp.hpp"
 
-#define DUMP_WHEN_ABOVE (MILLION / 5)
+/* #define DUMP_WHEN_ABOVE (MILLION / 5) */
+#define DUMP_WHEN_ABOVE 0
 #define DUMPING_CHUNK (MILLION / 10)
 #define RECEIVER_THREADS_COUNT 1
 
@@ -69,8 +70,8 @@ static void dump_to_output(uint32_t until_size = 0) {
     free_payload(payload);
   }
 
-  while (tcp_handler.delivered->urb_deliverable->size() > until_size) {
-    payload_t *payload = tcp_handler.delivered->urb_deliverable->dequeue();
+  while (tcp_handler.delivered->deliverable->size() > until_size) {
+    payload_t *payload = tcp_handler.delivered->deliverable->dequeue();
 
     output_file << "d " << payload->owner_id << " "
                 << buff_as_str(payload->buffer, payload->buff_size) << "\n";
@@ -82,7 +83,7 @@ static void dump_to_output(uint32_t until_size = 0) {
 
 static void keep_dumping_to_output() {
   while (!*tcp_handler.finito) {
-    uint32_t current_size = tcp_handler.delivered->urb_deliverable->size();
+    uint32_t current_size = tcp_handler.delivered->deliverable->size();
 
     uint32_t until_size = current_size - DUMPING_CHUNK;
 
@@ -164,7 +165,7 @@ int main(int argc, char **argv) {
 
   MessagesQueue sending_queue;
   MessagesQueue retrans_queue;
-  PayloadQueue urb_deliverable;
+  PayloadQueue deliverable;
   PayloadQueue broadcasted_queue;
   CausalityMap causality;
 
@@ -182,22 +183,25 @@ int main(int argc, char **argv) {
     iss = std::istringstream(line);
 
     if (DEBUG)
-      std::cout << "\nLine: " << line << "\n" << "Node: " << node->id;
+      std::cout << "\nLine: " << line << "\n"
+                << "Node: " << node->id;
 
     while (iss >> enter_number) {
-        causality[node->id].push_back(enter_number);
-        if (DEBUG)
+      causality[node->id].push_back(enter_number);
+      if (DEBUG)
         std::cout << ", num: " << enter_number;
     }
+    std::cout << "\n";
   }
 
   configFile.close();
 
-  myself_node =
-      nodes[get_node_idx_by_id(&nodes, static_cast<uint32_t>(parser.id()))];
+  uint32_t my_id = static_cast<uint32_t>(parser.id());
+  myself_node = nodes[get_node_idx_by_id(&nodes, my_id)];
 
   DeliveredSet delivered = DeliveredSet(myself_node, nodes.size());
-  delivered.urb_deliverable = &urb_deliverable;
+  delivered.deliverable = &deliverable;
+  delivered.causality = &causality;
 
   tcp_handler.sockfd = bind_socket(myself_node->port);
   tcp_handler.finito = &finito;
@@ -208,7 +212,6 @@ int main(int argc, char **argv) {
   tcp_handler.retrans_queue = &retrans_queue;
   tcp_handler.broadcasted_queue = &broadcasted_queue;
   tcp_handler.delivered = &delivered;
-  tcp_handler.causality = &causality;
 
   if (DEBUG)
     std::cout << "Spawning threads...\n";

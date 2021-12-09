@@ -13,7 +13,8 @@ void best_effort_broadcast(tcp_handler_t *tcp_handler, payload_t *payload) {
       continue; // don't send to yourself
     }
     payload_t *broadcast_payload = new payload_t;
-    copy_payload(broadcast_payload, payload);
+    uint32_t vc_size = vector_clock_size(tcp_handler);
+    copy_payload(broadcast_payload, payload, vc_size);
     message_t *message = new message_t;
     message->recipient = node;
     message->payload = broadcast_payload;
@@ -28,7 +29,7 @@ void uniform_reliable_broadcast(tcp_handler_t *tcp_handler, payload_t *payload,
 
     if (DEBUG) {
       std::cout << "Broadcasting: ";
-      show_payload(payload);
+      show_payload(payload, tcp_handler);
     }
 
     tcp_handler->delivered->mark_as_seen(payload);
@@ -56,7 +57,8 @@ void broadcast_messages(tcp_handler_t *tcp_handler, node_t *sender_node,
 
         payload = new payload_t;
 
-        construct_payload(payload, sender_node, *enqueued_messages);
+        construct_payload(tcp_handler, payload, sender_node,
+                          *enqueued_messages);
 
         uniform_reliable_broadcast(tcp_handler, payload, false);
         tcp_handler->broadcasted_queue->enqueue(payload);

@@ -23,13 +23,12 @@ size_t get_node_idx_by_id(std::vector<node_t *> *nodes, uint32_t id) {
   return -1;
 }
 
-bool send_udp_payload(int sockfd, node_t *receiver, payload_t *payload,
-                      ssize_t size) {
+bool send_udp_payload(struct tcp_handler_s *h, int sockfd, node_t *receiver,
+                      payload_t *payload, ssize_t size) {
   char buffer[IP_MAXPACKET];
   bool was_sent = true;
 
-  encode_udp_payload(payload, buffer, size);
-  ssize_t payload_size = PAYLOAD_META_SIZE + size;
+  ssize_t payload_size = encode_udp_payload(h, payload, buffer, size);
 
   if (DEBUG_V)
     std::cout << "Low level sending...\n";
@@ -49,7 +48,7 @@ bool send_udp_payload(int sockfd, node_t *receiver, payload_t *payload,
   if (DEBUG) {
     if (was_sent) {
       std::cout << "Sent to node " << receiver->id << " ";
-      show_payload(payload);
+      show_payload(payload, h);
     } else {
       std::cout << "Could not deliver the message!\n";
     }
@@ -57,7 +56,8 @@ bool send_udp_payload(int sockfd, node_t *receiver, payload_t *payload,
   return was_sent;
 }
 
-ssize_t receive_udp_payload(int sockfd, payload_t *payload) {
+ssize_t receive_udp_payload(struct tcp_handler_s *h, int sockfd,
+                            payload_t *payload) {
   char buffer[IP_MAXPACKET];
 
   ssize_t datagram_len = receive_udp_packet(sockfd, buffer, IP_MAXPACKET);
@@ -66,15 +66,13 @@ ssize_t receive_udp_payload(int sockfd, payload_t *payload) {
     return datagram_len;
   }
 
-  ssize_t buff_size = datagram_len - PAYLOAD_META_SIZE;
-  payload->buffer = new char[buff_size];
-  decode_udp_payload(payload, buffer, buff_size);
+  decode_udp_payload(h, payload, buffer, datagram_len);
 
   if (DEBUG) {
     std::cout << "Received ";
-    show_payload(payload);
+    show_payload(payload, h);
   }
-  return buff_size;
+  return datagram_len;
 }
 
 ssize_t send_udp_packet(int sockfd, node_t *receiver, const char *buffer,
