@@ -7,7 +7,7 @@ use std::net::UdpSocket;
 
 const MAX_UDP_PAYLOAD_SIZE: usize = 65535;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Payload {
     pub owner_id: u32,
     pub sender_id: u32,
@@ -35,15 +35,15 @@ impl Display for Payload {
 
 impl Payload {
     pub fn send_udp(
+        self,
         socket: &UdpSocket,
         node: &Node,
-        payload: Payload,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if DEBUG {
-            println!("Sending payload: {}", payload);
+            println!("Sending {}", self);
         }
         let destination = format!("{}:{}", node.ip, node.port);
-        let bytes = serialize(&payload)?;
+        let bytes = serialize(&self)?;
 
         socket.send_to(&bytes, destination)?;
         Ok(())
@@ -57,7 +57,7 @@ impl Payload {
         let payload: Payload = bincode::deserialize(&buf[..size])?;
 
         if DEBUG {
-            println!("Received payload: {}", payload);
+            println!("Received {}", payload);
         }
 
         Ok(payload)

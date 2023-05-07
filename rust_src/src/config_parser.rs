@@ -11,7 +11,7 @@ pub struct ProgramArgs {
     pub config: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub messages_count: u32,
     pub receiver_id: u32,

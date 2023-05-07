@@ -2,15 +2,28 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::{fmt, fmt::Display, fmt::Formatter};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
     pub id: u32,
     pub ip: String,
     pub port: u32,
 }
 
-pub fn read_hosts(path: &str) -> Result<HashMap<u32, Node>, Box<dyn std::error::Error>> {
+impl Display for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Node {{ id: {}, ip: {}, port: {} }}",
+            self.id, self.ip, self.port
+        )
+    }
+}
+
+pub fn read_hosts(
+    path: &str,
+) -> Result<HashMap<u32, Node>, Box<dyn std::error::Error>> {
     let path = Path::new(path);
     let file = File::open(path)?;
     let reader = BufReader::new(file);
