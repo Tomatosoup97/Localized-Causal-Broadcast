@@ -22,7 +22,7 @@ impl Display for Payload {
         let message = String::from_utf8(self.buffer.clone()).unwrap();
         write!(
             f,
-            "Payload {{ owner_id: {}, sender_id: {}, packet_uid: {}, is_ack: {}, vector_clock: {:?}, buffer: {:?} }}",
+            "Payload {{ is_ack: {}, owner_id: {}, sender_id: {}, packet_uid: {}, vector_clock: {:?}, buffer: {:?} }}",
             self.owner_id,
             self.sender_id,
             self.packet_uid,
@@ -35,7 +35,7 @@ impl Display for Payload {
 
 impl Payload {
     pub fn send_udp(
-        self,
+        &self,
         socket: &UdpSocket,
         node: &Node,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -43,7 +43,7 @@ impl Payload {
             println!("Sending {}", self);
         }
         let destination = format!("{}:{}", node.ip, node.port);
-        let bytes = serialize(&self)?;
+        let bytes = serialize(self)?;
 
         socket.send_to(&bytes, destination)?;
         Ok(())

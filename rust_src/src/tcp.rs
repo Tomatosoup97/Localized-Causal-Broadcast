@@ -26,36 +26,62 @@ impl Display for Message {
 }
 
 impl Message {
-    fn _should_retransmit(&self) -> bool {
+    fn _ready_for_retransmission(&self) -> bool {
         let elapsed_time = self.sending_time.elapsed();
         elapsed_time >= Duration::from_millis(RETRANSMISSION_OFFSET_MS)
+    }
+
+    fn should_retransmit(&self) -> bool {
+        !self.payload.is_ack
     }
 }
 
 pub fn keep_sending_messages(
     rx_sending_channel: mpsc::Receiver<Message>,
+    tx_retrans_channel: mpsc::Sender<Message>,
+    current_node_id: u32,
     socket: &UdpSocket,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for message in rx_sending_channel {
+    for mut message in rx_sending_channel {
         if DEBUG {
-            println!("Sending {}", message);
+            println!("Sending to {}", message.destination);
         }
+        message.payload.sender_id = current_node_id;
         message.payload.send_udp(socket, &message.destination)?;
+        message.sending_time = Instant::now();
+
+        if message.should_retransmit() {
+            tx_retrans_channel.send(message)?;
+        }
     }
     Ok(())
 }
 
 pub fn keep_receiving_messages(
     socket: &UdpSocket,
+    tx_sending_channel: mpsc::Sender<Message>,
+    nodes: HashMap<u32, Node>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
-        let _payload = Payload::receive_udp(socket)?;
+        let mut payload = Payload::receive_udp(socket)?;
+
+        if !payload.is_ack {
+            payload.is_ack = true;
+
+            let destination = nodes.get(&payload.owner_id).unwrap().clone();
+            let message = Message {
+                payload,
+                destination,
+                sending_time: Instant::now(),
+            };
+            tx_sending_channel.send(message)?;
+        }
     }
 }
 
 pub fn enqueue_messages(
     tx_sending_channel: mpsc::Sender<Message>,
-    sender_id: u32,
+    current_node_id: u32,
     config: Config,
     nodes: HashMap<u32, Node>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -63,8 +89,8 @@ pub fn enqueue_messages(
 
     for i in 1..config.messages_count + 1 {
         let payload = Payload {
-            owner_id: sender_id,
-            sender_id,
+            owner_id: current_node_id,
+            sender_id: current_node_id,
             packet_uid: i,
             is_ack: false,
             vector_clock: vec![0],
