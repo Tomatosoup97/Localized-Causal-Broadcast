@@ -1,9 +1,7 @@
-use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-
 
 #[derive(Debug)]
 pub struct ProgramArgs {
@@ -19,82 +17,58 @@ pub struct Config {
     pub receiver_id: u32,
 }
 
-#[derive(Debug)]
-pub struct Node {
-    pub id: u32,
-    pub ip: String,
-    pub port: u32,
-}
+impl Config {
+    pub fn read(path: &str) -> Result<Config, Box<dyn std::error::Error>> {
+        let path = Path::new(path);
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
 
-pub fn read_config_file(path: &str) -> Result<Config, Box<dyn std::error::Error>> {
-    let path = Path::new(path);
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-
-    let line = reader.lines().next().ok_or("Empty file")??;
-    let mut values = line.split_whitespace();
-
-    let messages_count = values.next().ok_or("Invalid input")?.parse::<u32>()?;
-    let receiver_id = values.next().ok_or("Invalid input")?.parse::<u32>()?;
-
-    Ok(Config {
-        messages_count,
-        receiver_id,
-    })
-}
-
-pub fn read_hosts(path: &str) -> Result<HashMap<u32, Node>, Box<dyn std::error::Error>> {
-    let path = Path::new(path);
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-
-    let mut nodes = HashMap::new();
-
-    for line in reader.lines() {
-        let line = line?;
+        let line = reader.lines().next().ok_or("Empty file")??;
         let mut values = line.split_whitespace();
 
-        let id = values.next().ok_or("Invalid input")?.parse::<u32>()?;
-        let ip = values.next().ok_or("Invalid input")?.to_string();
-        let port = values.next().ok_or("Invalid input")?.parse::<u32>()?;
+        let messages_count = values.next().ok_or("Invalid input")?.parse::<u32>()?;
+        let receiver_id = values.next().ok_or("Invalid input")?.parse::<u32>()?;
 
-        nodes.insert(id, Node { id, ip, port });
+        Ok(Config {
+            messages_count,
+            receiver_id,
+        })
     }
-
-    Ok(nodes)
 }
 
-pub fn parse_args() -> Result<ProgramArgs, String> {
-    let args: Vec<String> = env::args().collect();
+impl ProgramArgs {
+    pub fn parse() -> Result<ProgramArgs, String> {
+        let args: Vec<String> = env::args().collect();
 
-    if args.len() != 9 {
-        return Err("Wrong number of arguments".to_string());
-    }
-    let mut program_args = ProgramArgs {
-        id: 0,
-        hosts: String::new(),
-        output: String::new(),
-        config: String::new(),
-    };
-
-    for i in 1..args.len() {
-        match args[i].as_str() {
-            "--id" => {
-                program_args.id = args[i + 1].parse::<u32>().unwrap();
-            }
-            "--hosts" => {
-                program_args.hosts = args[i + 1].clone();
-            }
-            "--output" => {
-                program_args.output = args[i + 1].clone();
-            }
-            "--config" => {
-                program_args.config = args[i + 1].clone();
-            }
-            _ => {}
+        if args.len() != 9 {
+            return Err("Wrong number of arguments".to_string());
+        }
+        let mut program_args = ProgramArgs {
+            id: 0,
+            hosts: String::new(),
+            output: String::new(),
+            config: String::new(),
         };
+
+        for i in 1..args.len() {
+            match args[i].as_str() {
+                "--id" => {
+                    program_args.id = args[i + 1].parse::<u32>().unwrap();
+                }
+                "--hosts" => {
+                    program_args.hosts = args[i + 1].clone();
+                }
+                "--output" => {
+                    program_args.output = args[i + 1].clone();
+                }
+                "--config" => {
+                    program_args.config = args[i + 1].clone();
+                }
+                _ => {}
+            };
+        }
+        Ok(program_args)
     }
-    Ok(program_args)
 }
 
 pub fn create_output_file(path: &str) -> Result<(), Box<dyn std::error::Error>> {
