@@ -18,7 +18,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let current_node = nodes.get(&program_args.id).unwrap();
     let current_node_id = current_node.id;
-    let delivered = delivered::AccessDeliveredSet::new(delivered::DeliveredSet::new());
 
     if DEBUG {
         println!("------------------");
@@ -32,6 +31,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let (tx_sending, rx_sending) = mpsc::channel::<tcp::Message>();
     let (tx_retrans, rx_retrans) = mpsc::channel::<tcp::Message>();
+    let (tx_writing, rx_writing) = mpsc::channel::<delivered::LogEvent>();
+
+    let delivered_tx_writing = tx_writing.clone();
+    let delivered = delivered::AccessDeliveredSet::new(
+        delivered::DeliveredSet::new(),
+        delivered_tx_writing,
+    );
 
     let sender_socket = socket.try_clone().expect("couldn't clone the socket");
 
@@ -63,11 +69,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let tx_sending_retransmitter = tx_sending.clone();
+    let retransmitter_delivered = delivered.clone();
     let retransmission_thread = thread::spawn(move || {
         if let Err(e) = tcp::keep_retransmitting_messages(
             rx_retrans,
             tx_sending_retransmitter,
-            delivered,
+            retransmitter_delivered,
         ) {
             panic!("Error: {}", e)
         }
@@ -79,9 +86,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let enqueuer_thread = thread::spawn(move || {
         if let Err(e) = tcp::enqueue_messages(
             tx_sending,
+            tx_writing,
             current_node_id,
             enqueuer_config,
             enqueuer_nodes,
+        ) {
+            panic!("Error: {}", e)
+        }
+    });
+
+    let writer_thread = thread::spawn(move || {
+        if let Err(e) = delivered::keep_writing_delivered_messages(
+            &program_args.output,
+            delivered,
+            rx_writing,
         ) {
             panic!("Error: {}", e)
         }
@@ -91,6 +109,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     receiver_thread.join().unwrap();
     enqueuer_thread.join().unwrap();
     retransmission_thread.join().unwrap();
+    writer_thread.join().unwrap();
 
     Ok(())
 }

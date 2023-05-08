@@ -23,10 +23,10 @@ impl Display for Payload {
         write!(
             f,
             "Payload {{ is_ack: {}, owner_id: {}, sender_id: {}, packet_uid: {}, vector_clock: {:?}, buffer: {:?} }}",
+            self.is_ack,
             self.owner_id,
             self.sender_id,
             self.packet_uid,
-            self.is_ack,
             self.vector_clock,
             message,
         )

@@ -1,6 +1,6 @@
 use crate::conf::{DEBUG, RETRANSMISSION_OFFSET_MS};
 use crate::config_parser::Config;
-use crate::delivered::AccessDeliveredSet;
+use crate::delivered::{AccessDeliveredSet, LogEvent};
 use crate::hosts::{Node, Nodes};
 use crate::udp::Payload;
 use std::net::UdpSocket;
@@ -72,21 +72,17 @@ pub fn keep_receiving_messages(
     delivered: AccessDeliveredSet,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
-        let mut payload = Payload::receive_udp(socket)?;
+        let payload = Payload::receive_udp(socket)?;
 
         if !payload.is_ack {
-            payload.is_ack = true;
+            let mut acked_payload = payload.clone();
+            acked_payload.is_ack = true;
 
             let destination = nodes.get(&payload.sender_id).unwrap().clone();
-            let message = Message {
-                payload,
-                destination,
-                sending_time: Instant::now(),
-            };
+            let message = Message::new(acked_payload, destination);
             tx_sending_channel.send(message)?;
-        } else {
-            delivered.insert(payload.sender_id, payload.packet_uid);
         }
+        delivered.insert(payload);
     }
 }
 
@@ -116,6 +112,7 @@ pub fn keep_retransmitting_messages(
 
 pub fn enqueue_messages(
     tx_sending_channel: mpsc::Sender<Message>,
+    tx_writing_channel: mpsc::Sender<LogEvent>,
     current_node_id: u32,
     config: Config,
     nodes: Nodes,
@@ -128,19 +125,21 @@ pub fn enqueue_messages(
     }
 
     for i in 1..config.messages_count + 1 {
+        let contents = i.to_string();
         let payload = Payload {
             owner_id: current_node_id,
             sender_id: current_node_id,
             packet_uid: i,
             is_ack: false,
             vector_clock: vec![0],
-            buffer: i.to_string().as_bytes().to_vec(),
+            buffer: contents.as_bytes().to_vec(),
         };
         let message = Message::new(payload, destination.clone());
         if DEBUG {
             println!("Enqueuing {}", message);
         }
         tx_sending_channel.send(message)?;
+        tx_writing_channel.send(LogEvent::Broadcast { contents })?;
     }
     Ok(())
 }
