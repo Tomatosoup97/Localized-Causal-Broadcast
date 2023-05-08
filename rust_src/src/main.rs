@@ -4,6 +4,7 @@ use std::thread;
 
 mod conf;
 mod config_parser;
+mod delivered;
 mod hosts;
 mod tcp;
 mod udp;
@@ -16,19 +17,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let current_node = nodes.get(&program_args.id).unwrap();
     let current_node_id = current_node.id;
-    let receiver_node = nodes.get(&config.receiver_id).unwrap();
+    let delivered = delivered::AccessDeliveredSet::new(delivered::DeliveredSet::new());
 
     if DEBUG {
-        println!();
+        println!("------------------");
         println!("Program args: {:?}", program_args);
         println!("Config: {:?}", config);
         println!("Nodes: {:?}", nodes);
+        println!("------------------");
     }
 
     let socket = udp::bind_socket(&current_node.ip, current_node.port)?;
 
     let (tx_sending, rx_sending) = mpsc::channel::<tcp::Message>();
-    let (tx_retrans, _rx_retrans) = mpsc::channel::<tcp::Message>();
+    let (tx_retrans, rx_retrans) = mpsc::channel::<tcp::Message>();
 
     let sender_socket = socket.try_clone().expect("couldn't clone the socket");
 
@@ -45,6 +47,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let receiver_nodes = nodes.clone();
     let receiver_socket = socket.try_clone().expect("couldn't clone the socket");
+    let receiver_delivered = delivered.clone();
 
     let tx_sending_receiver = tx_sending.clone();
     let receiver_thread = thread::spawn(move || {
@@ -52,30 +55,41 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             &receiver_socket,
             tx_sending_receiver,
             receiver_nodes,
+            receiver_delivered,
         ) {
             panic!("Error: {}", e)
         }
     });
 
-    if current_node.id != receiver_node.id {
-        let enqueuer_config = config.clone();
-        let enqueuer_nodes = nodes.clone();
+    let tx_sending_retransmitter = tx_sending.clone();
+    let retransmission_thread = thread::spawn(move || {
+        if let Err(e) = tcp::keep_retransmitting_messages(
+            rx_retrans,
+            tx_sending_retransmitter,
+            delivered,
+        ) {
+            panic!("Error: {}", e)
+        }
+    });
 
-        let enqueuer_thread = thread::spawn(move || {
-            if let Err(e) = tcp::enqueue_messages(
-                tx_sending,
-                current_node_id,
-                enqueuer_config,
-                enqueuer_nodes,
-            ) {
-                panic!("Error: {}", e)
-            }
-        });
-        enqueuer_thread.join().unwrap();
-    }
+    let enqueuer_config = config;
+    let enqueuer_nodes = nodes.clone();
+
+    let enqueuer_thread = thread::spawn(move || {
+        if let Err(e) = tcp::enqueue_messages(
+            tx_sending,
+            current_node_id,
+            enqueuer_config,
+            enqueuer_nodes,
+        ) {
+            panic!("Error: {}", e)
+        }
+    });
 
     sender_thread.join().unwrap();
     receiver_thread.join().unwrap();
+    enqueuer_thread.join().unwrap();
+    retransmission_thread.join().unwrap();
 
     Ok(())
 }
