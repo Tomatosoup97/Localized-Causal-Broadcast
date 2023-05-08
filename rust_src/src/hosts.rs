@@ -4,6 +4,8 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::{fmt, fmt::Display, fmt::Formatter};
 
+pub type Nodes = HashMap<u32, Node>;
+
 #[derive(Debug, Clone)]
 pub struct Node {
     pub id: u32,
@@ -21,9 +23,7 @@ impl Display for Node {
     }
 }
 
-pub fn read_hosts(
-    path: &str,
-) -> Result<HashMap<u32, Node>, Box<dyn std::error::Error>> {
+pub fn read_hosts(path: &str) -> Result<Nodes, Box<dyn std::error::Error>> {
     let path = Path::new(path);
     let file = File::open(path)?;
     let reader = BufReader::new(file);

@@ -2,6 +2,7 @@ use conf::DEBUG;
 use std::sync::mpsc;
 use std::thread;
 
+mod broadcast;
 mod conf;
 mod config_parser;
 mod delivered;

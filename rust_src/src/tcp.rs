@@ -1,9 +1,8 @@
 use crate::conf::{DEBUG, RETRANSMISSION_OFFSET_MS};
 use crate::config_parser::Config;
 use crate::delivered::AccessDeliveredSet;
-use crate::hosts::Node;
+use crate::hosts::{Node, Nodes};
 use crate::udp::Payload;
-use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -27,6 +26,14 @@ impl Display for Message {
 }
 
 impl Message {
+    pub fn new(payload: Payload, destination: Node) -> Self {
+        Message {
+            payload,
+            destination,
+            sending_time: Instant::now(),
+        }
+    }
+
     fn ready_for_retransmission(&self) -> bool {
         let elapsed_time = self.sending_time.elapsed();
         elapsed_time >= Duration::from_millis(RETRANSMISSION_OFFSET_MS)
@@ -61,7 +68,7 @@ pub fn keep_sending_messages(
 pub fn keep_receiving_messages(
     socket: &UdpSocket,
     tx_sending_channel: mpsc::Sender<Message>,
-    nodes: HashMap<u32, Node>,
+    nodes: Nodes,
     delivered: AccessDeliveredSet,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
@@ -111,7 +118,7 @@ pub fn enqueue_messages(
     tx_sending_channel: mpsc::Sender<Message>,
     current_node_id: u32,
     config: Config,
-    nodes: HashMap<u32, Node>,
+    nodes: Nodes,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let destination = nodes.get(&config.receiver_id).unwrap();
 
@@ -129,11 +136,7 @@ pub fn enqueue_messages(
             vector_clock: vec![0],
             buffer: i.to_string().as_bytes().to_vec(),
         };
-        let message = Message {
-            payload,
-            destination: destination.clone(),
-            sending_time: Instant::now(),
-        };
+        let message = Message::new(payload, destination.clone());
         if DEBUG {
             println!("Enqueuing {}", message);
         }
