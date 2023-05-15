@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables)]
+
 use conf::DEBUG;
 use std::sync::mpsc;
 use std::thread;
@@ -69,7 +71,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let tx_sending_retransmitter = tx_sending.clone();
-    let retransmitter_delivered = delivered.clone();
+    let retransmitter_delivered = delivered;
     let retransmission_thread = thread::spawn(move || {
         if let Err(e) = tcp::keep_retransmitting_messages(
             rx_retrans,
@@ -96,11 +98,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let writer_thread = thread::spawn(move || {
-        if let Err(e) = delivered::keep_writing_delivered_messages(
-            &program_args.output,
-            delivered,
-            rx_writing,
-        ) {
+        if let Err(e) =
+            delivered::keep_writing_delivered_messages(&program_args.output, rx_writing)
+        {
             panic!("Error: {}", e)
         }
     });

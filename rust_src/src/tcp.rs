@@ -2,7 +2,7 @@ use crate::conf::{DEBUG, RETRANSMISSION_OFFSET_MS};
 use crate::config_parser::Config;
 use crate::delivered::{AccessDeliveredSet, LogEvent};
 use crate::hosts::{Node, Nodes};
-use crate::udp::Payload;
+use crate::udp::{Payload, PayloadKind};
 use std::net::UdpSocket;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -40,7 +40,7 @@ impl Message {
     }
 
     fn should_retransmit(&self) -> bool {
-        !self.payload.is_ack
+        !self.payload.kind.is_ack()
     }
 }
 
@@ -74,9 +74,9 @@ pub fn keep_receiving_messages(
     loop {
         let payload = Payload::receive_udp(socket)?;
 
-        if !payload.is_ack {
+        if !payload.kind.is_ack() {
             let mut acked_payload = payload.clone();
-            acked_payload.is_ack = true;
+            acked_payload.kind = PayloadKind::Ack;
 
             let destination = nodes.get(&payload.sender_id).unwrap().clone();
             let message = Message::new(acked_payload, destination);
@@ -126,11 +126,12 @@ pub fn enqueue_messages(
 
     for i in 1..config.messages_count + 1 {
         let contents = i.to_string();
+        let kind = PayloadKind::Tcp;
         let payload = Payload {
             owner_id: current_node_id,
             sender_id: current_node_id,
             packet_uid: i,
-            is_ack: false,
+            kind,
             vector_clock: vec![0],
             buffer: contents.as_bytes().to_vec(),
         };
@@ -139,7 +140,11 @@ pub fn enqueue_messages(
             println!("Enqueuing {}", message);
         }
         tx_sending_channel.send(message)?;
-        tx_writing_channel.send(LogEvent::Broadcast { contents })?;
+        tx_writing_channel.send(LogEvent::Dispatch {
+            recipient: Some(destination.clone()),
+            kind,
+            contents,
+        })?;
     }
     Ok(())
 }

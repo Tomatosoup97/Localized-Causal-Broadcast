@@ -1,4 +1,6 @@
-use crate::udp::Payload;
+use crate::conf::TASK_COMPATIBILITY;
+use crate::hosts::Node;
+use crate::udp::{Payload, PayloadKind};
 use std::collections::{HashMap, HashSet};
 use std::fs::OpenOptions;
 use std::io::prelude::*;
@@ -35,12 +37,16 @@ impl AccessDeliveredSet {
             .acked
             .entry(payload.sender_id)
             .or_insert(HashSet::new());
+
+        let already_acked = acked.contains(&payload.packet_uid);
+
         acked.insert(payload.packet_uid);
 
-        if !payload.is_ack {
+        if !already_acked && !payload.kind.is_ack() {
             self.tx_writing
                 .send(LogEvent::Delivery {
                     sender_id: payload.sender_id,
+                    kind: payload.kind,
                     contents,
                 })
                 .unwrap();
@@ -74,14 +80,22 @@ impl DeliveredSet {
     }
 }
 
+#[derive(Debug)]
 pub enum LogEvent {
-    Broadcast { contents: String },
-    Delivery { sender_id: u32, contents: String },
+    Dispatch {
+        recipient: Option<Node>,
+        kind: PayloadKind,
+        contents: String,
+    },
+    Delivery {
+        sender_id: u32,
+        kind: PayloadKind,
+        contents: String,
+    },
 }
 
 pub fn keep_writing_delivered_messages(
     path: &str,
-    _delivered: AccessDeliveredSet,
     rx_writing: Receiver<LogEvent>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let path = Path::new(path);
@@ -90,14 +104,27 @@ pub fn keep_writing_delivered_messages(
 
     for log_event in rx_writing {
         match log_event {
-            LogEvent::Broadcast { contents } => {
-                writeln!(file, "b {}", contents)?;
+            LogEvent::Dispatch {
+                recipient,
+                kind,
+                contents,
+            } => {
+                if TASK_COMPATIBILITY {
+                    writeln!(file, "b {}", contents)?;
+                } else {
+                    writeln!(file, "send {:?} {}", kind, contents)?;
+                }
             }
             LogEvent::Delivery {
                 sender_id,
+                kind,
                 contents,
             } => {
-                writeln!(file, "d {} {}", sender_id, contents)?;
+                if TASK_COMPATIBILITY {
+                    writeln!(file, "d {} {}", sender_id, contents)?;
+                } else {
+                    writeln!(file, "deliver {:?} {} {}", kind, sender_id, contents)?;
+                }
             }
         }
     }
