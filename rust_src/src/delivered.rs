@@ -12,12 +12,14 @@ type OwnerID = u32;
 type SenderID = u32;
 type PacketID = u32;
 
+#[derive(Debug)]
 pub struct DeliveredSet {
     acked: HashMap<SenderID, HashMap<OwnerID, HashSet<PacketID>>>,
     acked_counter: HashMap<SenderID, HashMap<OwnerID, u32>>,
     total_nodes: u32,
 }
 
+#[derive(Debug)]
 pub struct AccessDeliveredSet {
     pub delivered: Arc<Mutex<DeliveredSet>>,
     pub tx_writing: Sender<LogEvent>,
@@ -155,7 +157,7 @@ pub fn keep_writing_delivered_messages(
     for log_event in rx_writing {
         match log_event {
             LogEvent::Dispatch {
-                recipient,
+                recipient: _,
                 kind,
                 contents,
             } => {

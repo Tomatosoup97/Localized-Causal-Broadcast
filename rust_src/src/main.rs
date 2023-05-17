@@ -42,58 +42,53 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         delivered_tx_writing,
     );
 
+    let tcp_handler = tcp::TcpHandler {
+        nodes: nodes.clone(),
+        current_node_id,
+        tx_sending_channel: tx_sending,
+        delivered,
+    };
+
     let sender_socket = socket.try_clone().expect("couldn't clone the socket");
+    let sender_tcp_handler = tcp_handler.clone();
 
     let sender_thread = thread::spawn(move || {
         if let Err(e) = tcp::keep_sending_messages(
+            sender_tcp_handler,
             rx_sending,
             tx_retrans,
-            current_node_id,
             &sender_socket,
         ) {
             panic!("Error: {}", e)
         }
     });
 
-    let receiver_nodes = nodes.clone();
     let receiver_socket = socket.try_clone().expect("couldn't clone the socket");
-    let receiver_delivered = delivered.clone();
 
-    let tx_sending_receiver = tx_sending.clone();
+    let receiver_tcp_handler = tcp_handler.clone();
     let receiver_thread = thread::spawn(move || {
-        if let Err(e) = tcp::keep_receiving_messages(
-            &receiver_socket,
-            tx_sending_receiver,
-            receiver_nodes,
-            receiver_delivered,
-        ) {
+        if let Err(e) =
+            tcp::keep_receiving_messages(receiver_tcp_handler, &receiver_socket)
+        {
             panic!("Error: {}", e)
         }
     });
 
-    let tx_sending_retransmitter = tx_sending.clone();
-    let retransmitter_delivered = delivered;
+    let retransmitter_tcp_handler = tcp_handler.clone();
     let retransmission_thread = thread::spawn(move || {
-        if let Err(e) = tcp::keep_retransmitting_messages(
-            rx_retrans,
-            tx_sending_retransmitter,
-            retransmitter_delivered,
-        ) {
+        if let Err(e) =
+            tcp::keep_retransmitting_messages(retransmitter_tcp_handler, rx_retrans)
+        {
             panic!("Error: {}", e)
         }
     });
 
     let enqueuer_config = config;
-    let enqueuer_nodes = nodes.clone();
 
     let enqueuer_thread = thread::spawn(move || {
-        if let Err(e) = enqueue::enqueue_beb_messages(
-            tx_sending,
-            tx_writing,
-            current_node_id,
-            enqueuer_config,
-            enqueuer_nodes,
-        ) {
+        if let Err(e) =
+            enqueue::enqueue_messages(tcp_handler, tx_writing, enqueuer_config)
+        {
             panic!("Error: {}", e)
         }
     });
