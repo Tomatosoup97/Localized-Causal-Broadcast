@@ -25,6 +25,7 @@ pub fn enqueue_tcp_messages(
             sender_id: SenderID(tcp_handler.current_node_id),
             packet_uid: PacketID(i),
             kind,
+            is_ack: false,
             vector_clock: vec![0],
             buffer: contents.as_bytes().to_vec(),
         };
@@ -53,6 +54,7 @@ pub fn enqueue_broadcast_messages(
             sender_id: SenderID(tcp_handler.current_node_id),
             packet_uid: PacketID(i),
             kind,
+            is_ack: false,
             vector_clock: vec![0],
             buffer: contents.as_bytes().to_vec(),
         };

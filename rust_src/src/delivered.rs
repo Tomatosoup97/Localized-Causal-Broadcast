@@ -80,7 +80,6 @@ impl AccessDeliveredSet {
                 self.can_urb_deliver(&delivered, payload.owner_id, payload.packet_uid)
             }
             PayloadKind::Rb => true,
-            PayloadKind::Ack => false,
         };
 
         let already_delivered = delivered

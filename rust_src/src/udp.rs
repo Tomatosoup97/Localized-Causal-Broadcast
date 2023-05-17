@@ -36,17 +36,10 @@ impl Display for PacketID {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum PayloadKind {
-    Ack,
     Tcp,
     Beb,
     Rb,
     Urb,
-}
-
-impl PayloadKind {
-    pub fn is_ack(&self) -> bool {
-        matches!(self, PayloadKind::Ack)
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +48,7 @@ pub struct Payload {
     pub sender_id: SenderID,
     pub packet_uid: PacketID,
     pub kind: PayloadKind,
+    pub is_ack: bool,
     pub vector_clock: Vec<u32>,
     pub buffer: Vec<u8>,
 }

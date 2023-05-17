@@ -48,7 +48,7 @@ impl Message {
     }
 
     fn should_retransmit(&self) -> bool {
-        !self.payload.kind.is_ack()
+        !self.payload.is_ack
     }
 }
 
@@ -80,9 +80,9 @@ pub fn keep_receiving_messages(
     loop {
         let payload = Payload::receive_udp(socket)?;
 
-        if !payload.kind.is_ack() {
+        if !payload.is_ack {
             let mut acked_payload = payload.clone();
-            acked_payload.kind = PayloadKind::Ack;
+            acked_payload.is_ack = true;
 
             let destination =
                 tcp_handler.nodes.get(&payload.sender_id.0).unwrap().clone();
@@ -108,14 +108,6 @@ pub fn keep_retransmitting_messages(
     rx_retrans_channel: mpsc::Receiver<Message>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     for message in rx_retrans_channel {
-        if tcp_handler.delivered.contains(
-            SenderID(message.destination.id),
-            message.payload.owner_id,
-            message.payload.packet_uid,
-        ) {
-            continue;
-        }
-
         while !message.ready_for_retransmission() {
             std::thread::sleep(Duration::from_millis(RETRANSMISSION_OFFSET_MS / 10));
         }
