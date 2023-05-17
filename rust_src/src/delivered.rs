@@ -12,6 +12,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 pub struct DeliveredSet {
     acked: HashMap<SenderID, HashMap<OwnerID, HashSet<PacketID>>>,
     acked_counter: HashMap<OwnerID, HashMap<PacketID, u32>>,
+    received_up_to: HashMap<OwnerID, u32>,
+    undelivered: HashMap<OwnerID, HashMap<PacketID, Payload>>,
     set: HashMap<OwnerID, HashSet<PacketID>>,
 }
 
@@ -20,6 +22,8 @@ impl DeliveredSet {
         Self {
             acked: HashMap::new(),
             acked_counter: HashMap::new(),
+            received_up_to: HashMap::new(),
+            undelivered: HashMap::new(),
             set: HashMap::new(),
         }
     }
@@ -49,7 +53,6 @@ impl AccessDeliveredSet {
     }
 
     pub fn insert(&self, sender_id: SenderID, payload: &Payload) {
-        let contents = String::from_utf8(payload.buffer.clone()).unwrap();
         let mut delivered = self.delivered.lock().unwrap();
 
         let acked = delivered
@@ -73,36 +76,112 @@ impl AccessDeliveredSet {
                 .or_insert(1);
         }
 
-        let can_deliver = match payload.kind {
-            PayloadKind::Tcp => true,
-            PayloadKind::Beb => true,
-            PayloadKind::Urb => {
-                self.can_urb_deliver(&delivered, payload.owner_id, payload.packet_uid)
-            }
-            PayloadKind::Rb => true,
-        };
-
         let already_delivered = delivered
             .set
             .entry(payload.owner_id)
             .or_insert(HashSet::new())
             .contains(&payload.packet_uid);
 
-        if !already_delivered && can_deliver {
+        if !already_delivered {
             delivered
-                .set
+                .undelivered
                 .entry(payload.owner_id)
-                .or_insert(HashSet::new())
-                .insert(payload.packet_uid);
+                .or_insert(HashMap::new())
+                .insert(payload.packet_uid, payload.clone());
 
-            self.tx_writing
-                .send(LogEvent::Delivery {
-                    owner_id: payload.owner_id,
-                    kind: payload.kind,
-                    contents,
-                })
-                .unwrap();
+            self.try_delivering(
+                delivered,
+                payload.kind,
+                payload.owner_id,
+                payload.packet_uid,
+            );
         }
+    }
+
+    fn try_delivering(
+        &self,
+        mut delivered: MutexGuard<DeliveredSet>,
+        kind: PayloadKind,
+        owner_id: OwnerID,
+        packet_uid: PacketID,
+    ) {
+        let can_deliver = match kind {
+            PayloadKind::Tcp => true,
+            PayloadKind::Beb => true,
+            PayloadKind::Rb => true,
+            PayloadKind::Urb => self.can_urb_deliver(&delivered, owner_id, packet_uid),
+            PayloadKind::Fifob => {
+                self.can_fifob_deliver(&delivered, owner_id, packet_uid)
+            }
+        };
+        if !can_deliver {
+            return;
+        }
+
+        let payload = delivered
+            .undelivered
+            .entry(owner_id)
+            .or_insert(HashMap::new())
+            .remove(&packet_uid)
+            .unwrap();
+
+        if matches!(payload.kind, PayloadKind::Fifob) {
+            self.try_delivering_fifob(delivered, &payload);
+        } else {
+            self.deliver(&mut delivered, &payload);
+        }
+    }
+
+    fn try_delivering_fifob(
+        &self,
+        mut delivered: MutexGuard<DeliveredSet>,
+        payload: &Payload,
+    ) {
+        let received_up_to = match delivered.received_up_to.get(&payload.owner_id) {
+            Some(received_up_to) => *received_up_to,
+            None => 1,
+        };
+
+        if payload.packet_uid.0 == received_up_to {
+            self.deliver(&mut delivered, payload);
+
+            delivered
+                .received_up_to
+                .insert(payload.owner_id, received_up_to + 1);
+
+            self.try_delivering(
+                delivered,
+                payload.kind,
+                payload.owner_id,
+                PacketID(payload.packet_uid.0 + 1),
+            );
+        } else {
+            // putting it back
+
+            delivered
+                .undelivered
+                .entry(payload.owner_id)
+                .or_insert(HashMap::new())
+                .insert(payload.packet_uid, payload.clone());
+        }
+    }
+
+    fn deliver(&self, delivered: &mut MutexGuard<DeliveredSet>, payload: &Payload) {
+        let contents = String::from_utf8(payload.buffer.clone()).unwrap();
+
+        delivered
+            .set
+            .entry(payload.owner_id)
+            .or_insert(HashSet::new())
+            .insert(payload.packet_uid);
+
+        self.tx_writing
+            .send(LogEvent::Delivery {
+                owner_id: payload.owner_id,
+                kind: payload.kind,
+                contents,
+            })
+            .unwrap();
     }
 
     pub fn contains(
@@ -153,6 +232,15 @@ impl AccessDeliveredSet {
     fn majority(&self) -> u32 {
         (self.total_nodes / 2) + 1
     }
+
+    fn can_fifob_deliver(
+        &self,
+        delivered: &MutexGuard<DeliveredSet>,
+        owner_id: OwnerID,
+        packet_uid: PacketID,
+    ) -> bool {
+        self.can_urb_deliver(delivered, owner_id, packet_uid)
+    }
 }
 
 impl Clone for AccessDeliveredSet {
@@ -198,7 +286,7 @@ pub fn keep_writing_delivered_messages(
                 if TASK_COMPATIBILITY {
                     writeln!(file, "b {}", contents)?;
                 } else {
-                    writeln!(file, "send {:?}: {}", kind, contents)?;
+                    writeln!(file, "sent {:?}: {}", kind, contents)?;
                 }
             }
             LogEvent::Delivery {
@@ -207,11 +295,11 @@ pub fn keep_writing_delivered_messages(
                 contents,
             } => {
                 if TASK_COMPATIBILITY {
-                    writeln!(file, "d {} {}", owner_id, contents)?;
+                    writeln!(file, "d {} {}", owner_id.0, contents)?;
                 } else {
                     writeln!(
                         file,
-                        "deliver {:?} from {}: {}",
+                        "delivered {:?} from {}: {}",
                         kind, owner_id, contents
                     )?;
                 }

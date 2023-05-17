@@ -70,6 +70,7 @@ pub fn enqueue_broadcast_messages(
             PayloadKind::Urb => {
                 broadcast::uniform_reliable_broadcast(tcp_handler, &payload)
             }
+            PayloadKind::Fifob => broadcast::fifo_broadcast(tcp_handler, &payload),
             _ => panic!("Invalid payload kind to broadcast"),
         }
     }
@@ -85,7 +86,7 @@ pub fn enqueue_messages(
         &tcp_handler,
         &tx_writing_channel,
         &config,
-        PayloadKind::Urb,
+        PayloadKind::Fifob,
     )?;
     Ok(())
 }

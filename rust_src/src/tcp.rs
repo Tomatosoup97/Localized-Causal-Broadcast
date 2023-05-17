@@ -98,6 +98,9 @@ pub fn keep_receiving_messages(
             PayloadKind::Urb => {
                 broadcast::uniform_reliable_broadcast(&tcp_handler, &payload);
             }
+            PayloadKind::Fifob => {
+                broadcast::fifo_broadcast(&tcp_handler, &payload);
+            }
             _ => {} // nothing to do
         }
     }

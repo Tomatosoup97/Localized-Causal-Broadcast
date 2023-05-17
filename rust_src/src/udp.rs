@@ -40,6 +40,7 @@ pub enum PayloadKind {
     Beb,
     Rb,
     Urb,
+    Fifob,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,7 +59,8 @@ impl Display for Payload {
         let message = String::from_utf8(self.buffer.clone()).unwrap();
         write!(
             f,
-            "Payload {{ kind: {:?}, owner_id: {}, sender_id: {}, packet_uid: {}, vector_clock: {:?}, buffer: {:?} }}",
+            "Payload {{ is_ack: {:?}, kind: {:?}, owner_id: {}, sender_id: {}, packet_uid: {}, vector_clock: {:?}, buffer: {:?} }}",
+            self.is_ack,
             self.kind,
             self.owner_id,
             self.sender_id,

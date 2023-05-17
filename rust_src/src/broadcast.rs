@@ -32,3 +32,10 @@ pub fn uniform_reliable_broadcast(tcp_handler: &TcpHandler, payload: &Payload) {
     }
     reliable_broadcast(tcp_handler, payload);
 }
+
+pub fn fifo_broadcast(tcp_handler: &TcpHandler, payload: &Payload) {
+    if DEBUG {
+        println!("FIFOB: {}", payload);
+    }
+    uniform_reliable_broadcast(tcp_handler, payload);
+}
