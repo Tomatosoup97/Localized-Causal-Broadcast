@@ -6,40 +6,61 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 type OwnerID = u32;
 type SenderID = u32;
 type PacketID = u32;
 
+type AckedCounter = HashMap<OwnerID, HashMap<PacketID, u32>>;
+
 #[derive(Debug)]
 pub struct DeliveredSet {
     acked: HashMap<SenderID, HashMap<OwnerID, HashSet<PacketID>>>,
-    acked_counter: HashMap<SenderID, HashMap<OwnerID, u32>>,
-    total_nodes: u32,
+    acked_counter: AckedCounter,
+    set: HashMap<OwnerID, HashSet<PacketID>>,
+}
+
+impl DeliveredSet {
+    pub fn new() -> Self {
+        Self {
+            acked: HashMap::new(),
+            acked_counter: HashMap::new(),
+            set: HashMap::new(),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct AccessDeliveredSet {
     pub delivered: Arc<Mutex<DeliveredSet>>,
     pub tx_writing: Sender<LogEvent>,
+    total_nodes: u32,
+    current_node_id: u32,
 }
 
 impl AccessDeliveredSet {
-    pub fn new(delivered: DeliveredSet, tx_writing: Sender<LogEvent>) -> Self {
+    pub fn new(
+        delivered: DeliveredSet,
+        tx_writing: Sender<LogEvent>,
+        total_nodes: u32,
+        current_node_id: u32,
+    ) -> Self {
         Self {
             delivered: Arc::new(Mutex::new(delivered)),
             tx_writing,
+            total_nodes,
+            current_node_id,
         }
     }
 
-    pub fn insert(&self, payload: Payload) {
-        let contents = String::from_utf8(payload.buffer).unwrap();
+    pub fn insert(&self, sender_id: SenderID, payload: &Payload) {
+        let contents = String::from_utf8(payload.buffer.clone()).unwrap();
         let mut delivered = self.delivered.lock().unwrap();
 
         let acked = delivered
             .acked
-            .entry(payload.sender_id)
+            .entry(sender_id)
             .or_insert(HashMap::new())
             .entry(payload.owner_id)
             .or_insert(HashSet::new());
@@ -48,34 +69,46 @@ impl AccessDeliveredSet {
 
         acked.insert(payload.packet_uid);
 
-        if !already_acked && !payload.kind.is_ack() {
+        if !already_acked {
             delivered
                 .acked_counter
-                .entry(payload.sender_id)
-                .or_insert(HashMap::new())
                 .entry(payload.owner_id)
+                .or_insert(HashMap::new())
+                .entry(payload.packet_uid)
                 .and_modify(|acked_counter| *acked_counter += 1)
                 .or_insert(1);
+        }
 
-            let can_deliver = match payload.kind {
-                PayloadKind::Tcp => true,
-                PayloadKind::Beb => true,
-                PayloadKind::Urb => {
-                    self.can_urb_deliver(payload.sender_id, payload.owner_id)
-                }
-                PayloadKind::Rb => panic!("Unsupported payload kind: Rb"),
-                PayloadKind::Ack => unreachable!(),
-            };
-
-            if can_deliver {
-                self.tx_writing
-                    .send(LogEvent::Delivery {
-                        sender_id: payload.sender_id,
-                        kind: payload.kind,
-                        contents,
-                    })
-                    .unwrap();
+        let can_deliver = match payload.kind {
+            PayloadKind::Tcp => true,
+            PayloadKind::Beb => true,
+            PayloadKind::Urb => {
+                self.can_urb_deliver(&delivered, payload.owner_id, payload.packet_uid)
             }
+            PayloadKind::Rb => true,
+            PayloadKind::Ack => false,
+        };
+
+        let already_delivered = delivered
+            .set
+            .entry(payload.owner_id)
+            .or_insert(HashSet::new())
+            .contains(&payload.packet_uid);
+
+        if !already_delivered && can_deliver {
+            delivered
+                .set
+                .entry(payload.owner_id)
+                .or_insert(HashSet::new())
+                .insert(payload.packet_uid);
+
+            self.tx_writing
+                .send(LogEvent::Delivery {
+                    owner_id: payload.owner_id,
+                    kind: payload.kind,
+                    contents,
+                })
+                .unwrap();
         }
     }
 
@@ -96,20 +129,32 @@ impl AccessDeliveredSet {
         }
     }
 
-    fn can_urb_deliver(&self, sender_id: SenderID, owner_id: OwnerID) -> bool {
-        let delivered = self.delivered.lock().unwrap();
-        let acked_counter = delivered
+    pub fn mark_as_seen(&self, payload: &Payload) {
+        self.insert(self.current_node_id, payload)
+    }
+
+    pub fn was_seen(&self, payload: &Payload) -> bool {
+        self.contains(self.current_node_id, payload.owner_id, payload.packet_uid)
+    }
+
+    fn can_urb_deliver(
+        &self,
+        delivered: &MutexGuard<DeliveredSet>,
+        owner_id: OwnerID,
+        packet_uid: PacketID,
+    ) -> bool {
+        let acked_count = delivered
             .acked_counter
-            .get(&sender_id)
-            .and_then(|acked_counter| acked_counter.get(&owner_id));
-        match acked_counter {
-            Some(acked_counter) => *acked_counter >= self.majority(),
+            .get(&owner_id)
+            .and_then(|acked_counter| acked_counter.get(&packet_uid));
+        match acked_count {
+            Some(acked_count) => *acked_count >= self.majority(),
             None => false,
         }
     }
 
     fn majority(&self) -> u32 {
-        (self.delivered.lock().unwrap().total_nodes / 2) + 1
+        (self.total_nodes / 2) + 1
     }
 }
 
@@ -118,16 +163,8 @@ impl Clone for AccessDeliveredSet {
         Self {
             delivered: Arc::clone(&self.delivered),
             tx_writing: self.tx_writing.clone(),
-        }
-    }
-}
-
-impl DeliveredSet {
-    pub fn new(total_nodes: u32) -> Self {
-        Self {
-            acked: HashMap::new(),
-            acked_counter: HashMap::new(),
-            total_nodes,
+            total_nodes: self.total_nodes,
+            current_node_id: self.current_node_id,
         }
     }
 }
@@ -140,7 +177,7 @@ pub enum LogEvent {
         contents: String,
     },
     Delivery {
-        sender_id: u32,
+        owner_id: u32,
         kind: PayloadKind,
         contents: String,
     },
@@ -164,18 +201,22 @@ pub fn keep_writing_delivered_messages(
                 if TASK_COMPATIBILITY {
                     writeln!(file, "b {}", contents)?;
                 } else {
-                    writeln!(file, "send {:?} {}", kind, contents)?;
+                    writeln!(file, "send {:?}: {}", kind, contents)?;
                 }
             }
             LogEvent::Delivery {
-                sender_id,
+                owner_id,
                 kind,
                 contents,
             } => {
                 if TASK_COMPATIBILITY {
-                    writeln!(file, "d {} {}", sender_id, contents)?;
+                    writeln!(file, "d {} {}", owner_id, contents)?;
                 } else {
-                    writeln!(file, "deliver {:?} {} {}", kind, sender_id, contents)?;
+                    writeln!(
+                        file,
+                        "deliver {:?} from {}: {}",
+                        kind, owner_id, contents
+                    )?;
                 }
             }
         }

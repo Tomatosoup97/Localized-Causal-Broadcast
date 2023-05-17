@@ -38,8 +38,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let delivered_tx_writing = tx_writing.clone();
     let delivered = delivered::AccessDeliveredSet::new(
-        delivered::DeliveredSet::new(nodes.len() as u32),
+        delivered::DeliveredSet::new(),
         delivered_tx_writing,
+        nodes.len() as u32,
+        current_node_id,
     );
 
     let tcp_handler = tcp::TcpHandler {

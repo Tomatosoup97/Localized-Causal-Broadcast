@@ -1,4 +1,5 @@
-use crate::conf::{DEBUG, RETRANSMISSION_OFFSET_MS};
+use crate::broadcast;
+use crate::conf::{DEBUG_VERBOSE, RETRANSMISSION_OFFSET_MS};
 use crate::delivered::AccessDeliveredSet;
 use crate::hosts::{Node, Nodes};
 use crate::udp::{Payload, PayloadKind};
@@ -58,7 +59,7 @@ pub fn keep_sending_messages(
     socket: &UdpSocket,
 ) -> Result<(), Box<dyn std::error::Error>> {
     for mut message in rx_sending_channel {
-        if DEBUG {
+        if DEBUG_VERBOSE {
             println!("Sending to {}", message.destination);
         }
         message.payload.sender_id = tcp_handler.current_node_id;
@@ -88,11 +89,17 @@ pub fn keep_receiving_messages(
             let message = Message::new(acked_payload, destination);
             tcp_handler.tx_sending_channel.send(message)?;
         }
-        tcp_handler.delivered.insert(payload);
+        tcp_handler.delivered.insert(payload.sender_id, &payload);
 
-        // match payload.kind {
-        //     _ => {} // nothing to do
-        // }
+        match payload.kind {
+            PayloadKind::Rb => {
+                broadcast::reliable_broadcast(&tcp_handler, &payload);
+            }
+            PayloadKind::Urb => {
+                broadcast::uniform_reliable_broadcast(&tcp_handler, &payload);
+            }
+            _ => {} // nothing to do
+        }
     }
 }
 
@@ -118,7 +125,7 @@ pub fn keep_retransmitting_messages(
             message.payload.owner_id,
             message.payload.packet_uid,
         ) {
-            if DEBUG {
+            if DEBUG_VERBOSE {
                 println!("Retransmitting {}", message);
             }
             tcp_handler.tx_sending_channel.send(message)?;
