@@ -2,7 +2,7 @@ use crate::broadcast;
 use crate::conf::{DEBUG_VERBOSE, RETRANSMISSION_OFFSET_MS};
 use crate::delivered::AccessDeliveredSet;
 use crate::hosts::{Node, Nodes};
-use crate::udp::{Payload, PayloadKind};
+use crate::udp::{Payload, PayloadKind, SenderID};
 use std::net::UdpSocket;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -62,7 +62,7 @@ pub fn keep_sending_messages(
         if DEBUG_VERBOSE {
             println!("Sending to {}", message.destination);
         }
-        message.payload.sender_id = tcp_handler.current_node_id;
+        message.payload.sender_id = SenderID(tcp_handler.current_node_id);
         message.payload.send_udp(socket, &message.destination)?;
         message.sending_time = Instant::now();
 
@@ -85,7 +85,7 @@ pub fn keep_receiving_messages(
             acked_payload.kind = PayloadKind::Ack;
 
             let destination =
-                tcp_handler.nodes.get(&payload.sender_id).unwrap().clone();
+                tcp_handler.nodes.get(&payload.sender_id.0).unwrap().clone();
             let message = Message::new(acked_payload, destination);
             tcp_handler.tx_sending_channel.send(message)?;
         }
@@ -109,7 +109,7 @@ pub fn keep_retransmitting_messages(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for message in rx_retrans_channel {
         if tcp_handler.delivered.contains(
-            message.destination.id,
+            SenderID(message.destination.id),
             message.payload.owner_id,
             message.payload.packet_uid,
         ) {
@@ -121,7 +121,7 @@ pub fn keep_retransmitting_messages(
         }
 
         if !tcp_handler.delivered.contains(
-            message.destination.id,
+            SenderID(message.destination.id),
             message.payload.owner_id,
             message.payload.packet_uid,
         ) {

@@ -2,7 +2,7 @@ use crate::broadcast;
 use crate::config_parser::Config;
 use crate::delivered::LogEvent;
 use crate::tcp::{Message, TcpHandler};
-use crate::udp::{Payload, PayloadKind};
+use crate::udp::{OwnerID, PacketID, Payload, PayloadKind, SenderID};
 use std::sync::mpsc;
 
 pub fn enqueue_tcp_messages(
@@ -21,9 +21,9 @@ pub fn enqueue_tcp_messages(
         let contents = i.to_string();
         let kind = PayloadKind::Tcp;
         let payload = Payload {
-            owner_id: tcp_handler.current_node_id,
-            sender_id: tcp_handler.current_node_id,
-            packet_uid: i,
+            owner_id: OwnerID(tcp_handler.current_node_id),
+            sender_id: SenderID(tcp_handler.current_node_id),
+            packet_uid: PacketID(i),
             kind,
             vector_clock: vec![0],
             buffer: contents.as_bytes().to_vec(),
@@ -49,9 +49,9 @@ pub fn enqueue_broadcast_messages(
     for i in 1..config.messages_count + 1 {
         let contents = i.to_string();
         let payload = Payload {
-            owner_id: tcp_handler.current_node_id,
-            sender_id: tcp_handler.current_node_id,
-            packet_uid: i,
+            owner_id: OwnerID(tcp_handler.current_node_id),
+            sender_id: SenderID(tcp_handler.current_node_id),
+            packet_uid: PacketID(i),
             kind,
             vector_clock: vec![0],
             buffer: contents.as_bytes().to_vec(),

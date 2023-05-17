@@ -1,6 +1,6 @@
 use crate::conf::TASK_COMPATIBILITY;
 use crate::hosts::Node;
-use crate::udp::{Payload, PayloadKind};
+use crate::udp::{OwnerID, PacketID, Payload, PayloadKind, SenderID};
 use std::collections::{HashMap, HashSet};
 use std::fs::OpenOptions;
 use std::io::prelude::*;
@@ -8,16 +8,10 @@ use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-type OwnerID = u32;
-type SenderID = u32;
-type PacketID = u32;
-
-type AckedCounter = HashMap<OwnerID, HashMap<PacketID, u32>>;
-
 #[derive(Debug)]
 pub struct DeliveredSet {
     acked: HashMap<SenderID, HashMap<OwnerID, HashSet<PacketID>>>,
-    acked_counter: AckedCounter,
+    acked_counter: HashMap<OwnerID, HashMap<PacketID, u32>>,
     set: HashMap<OwnerID, HashSet<PacketID>>,
 }
 
@@ -130,11 +124,15 @@ impl AccessDeliveredSet {
     }
 
     pub fn mark_as_seen(&self, payload: &Payload) {
-        self.insert(self.current_node_id, payload)
+        self.insert(SenderID(self.current_node_id), payload)
     }
 
     pub fn was_seen(&self, payload: &Payload) -> bool {
-        self.contains(self.current_node_id, payload.owner_id, payload.packet_uid)
+        self.contains(
+            SenderID(self.current_node_id),
+            payload.owner_id,
+            payload.packet_uid,
+        )
     }
 
     fn can_urb_deliver(
@@ -177,7 +175,7 @@ pub enum LogEvent {
         contents: String,
     },
     Delivery {
-        owner_id: u32,
+        owner_id: OwnerID,
         kind: PayloadKind,
         contents: String,
     },

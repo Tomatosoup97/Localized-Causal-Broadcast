@@ -7,6 +7,33 @@ use std::net::UdpSocket;
 
 const MAX_UDP_PAYLOAD_SIZE: usize = 65535;
 
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, Hash, PartialEq, Copy)]
+pub struct OwnerID(pub u32);
+
+impl Display for OwnerID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "OwnerID({})", self.0)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, Hash, PartialEq, Copy)]
+pub struct SenderID(pub u32);
+
+impl Display for SenderID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "SenderID({})", self.0)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, Hash, PartialEq, Copy)]
+pub struct PacketID(pub u32);
+
+impl Display for PacketID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "PacketID({})", self.0)
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum PayloadKind {
     Ack,
@@ -24,9 +51,9 @@ impl PayloadKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Payload {
-    pub owner_id: u32,
-    pub sender_id: u32,
-    pub packet_uid: u32,
+    pub owner_id: OwnerID,
+    pub sender_id: SenderID,
+    pub packet_uid: PacketID,
     pub kind: PayloadKind,
     pub vector_clock: Vec<u32>,
     pub buffer: Vec<u8>,
