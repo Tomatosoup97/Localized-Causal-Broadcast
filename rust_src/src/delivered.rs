@@ -8,12 +8,14 @@ use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
-type _OwnerID = u32;
+type OwnerID = u32;
 type SenderID = u32;
 type PacketID = u32;
 
 pub struct DeliveredSet {
-    acked: HashMap<SenderID, HashSet<PacketID>>,
+    acked: HashMap<SenderID, HashMap<OwnerID, HashSet<PacketID>>>,
+    acked_counter: HashMap<SenderID, HashMap<OwnerID, u32>>,
+    total_nodes: u32,
 }
 
 pub struct AccessDeliveredSet {
@@ -36,6 +38,8 @@ impl AccessDeliveredSet {
         let acked = delivered
             .acked
             .entry(payload.sender_id)
+            .or_insert(HashMap::new())
+            .entry(payload.owner_id)
             .or_insert(HashSet::new());
 
         let already_acked = acked.contains(&payload.packet_uid);
@@ -43,23 +47,67 @@ impl AccessDeliveredSet {
         acked.insert(payload.packet_uid);
 
         if !already_acked && !payload.kind.is_ack() {
-            self.tx_writing
-                .send(LogEvent::Delivery {
-                    sender_id: payload.sender_id,
-                    kind: payload.kind,
-                    contents,
-                })
-                .unwrap();
+            delivered
+                .acked_counter
+                .entry(payload.sender_id)
+                .or_insert(HashMap::new())
+                .entry(payload.owner_id)
+                .and_modify(|acked_counter| *acked_counter += 1)
+                .or_insert(1);
+
+            let can_deliver = match payload.kind {
+                PayloadKind::Tcp => true,
+                PayloadKind::Beb => true,
+                PayloadKind::Urb => {
+                    self.can_urb_deliver(payload.sender_id, payload.owner_id)
+                }
+                PayloadKind::Rb => panic!("Unsupported payload kind: Rb"),
+                PayloadKind::Ack => unreachable!(),
+            };
+
+            if can_deliver {
+                self.tx_writing
+                    .send(LogEvent::Delivery {
+                        sender_id: payload.sender_id,
+                        kind: payload.kind,
+                        contents,
+                    })
+                    .unwrap();
+            }
         }
     }
 
-    pub fn contains(&self, sender_id: SenderID, packet_uid: PacketID) -> bool {
+    pub fn contains(
+        &self,
+        sender_id: SenderID,
+        owner_id: OwnerID,
+        packet_uid: PacketID,
+    ) -> bool {
         let delivered = self.delivered.lock().unwrap();
-        let acked = delivered.acked.get(&sender_id);
+        let acked = delivered
+            .acked
+            .get(&sender_id)
+            .and_then(|acked| acked.get(&owner_id));
         match acked {
             Some(acked) => acked.contains(&packet_uid),
             None => false,
         }
+    }
+
+    fn can_urb_deliver(&self, sender_id: SenderID, owner_id: OwnerID) -> bool {
+        let delivered = self.delivered.lock().unwrap();
+        let acked_counter = delivered
+            .acked_counter
+            .get(&sender_id)
+            .and_then(|acked_counter| acked_counter.get(&owner_id));
+        match acked_counter {
+            Some(acked_counter) => *acked_counter >= self.majority(),
+            None => false,
+        }
+    }
+
+    fn majority(&self) -> u32 {
+        (self.delivered.lock().unwrap().total_nodes / 2) + 1
     }
 }
 
@@ -73,9 +121,11 @@ impl Clone for AccessDeliveredSet {
 }
 
 impl DeliveredSet {
-    pub fn new() -> Self {
+    pub fn new(total_nodes: u32) -> Self {
         Self {
             acked: HashMap::new(),
+            acked_counter: HashMap::new(),
+            total_nodes,
         }
     }
 }

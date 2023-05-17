@@ -8,6 +8,7 @@ mod broadcast;
 mod conf;
 mod config_parser;
 mod delivered;
+mod enqueue;
 mod hosts;
 mod tcp;
 mod udp;
@@ -37,7 +38,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let delivered_tx_writing = tx_writing.clone();
     let delivered = delivered::AccessDeliveredSet::new(
-        delivered::DeliveredSet::new(),
+        delivered::DeliveredSet::new(nodes.len() as u32),
         delivered_tx_writing,
     );
 
@@ -86,7 +87,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let enqueuer_nodes = nodes.clone();
 
     let enqueuer_thread = thread::spawn(move || {
-        if let Err(e) = tcp::enqueue_messages(
+        if let Err(e) = enqueue::enqueue_beb_messages(
             tx_sending,
             tx_writing,
             current_node_id,

@@ -1,4 +1,4 @@
-use crate::conf::DEBUG;
+use crate::conf::DEBUG_VERBOSE;
 use crate::hosts::Node;
 use bincode::serialize;
 use serde::{Deserialize, Serialize};
@@ -54,7 +54,7 @@ impl Payload {
         socket: &UdpSocket,
         node: &Node,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        if DEBUG {
+        if DEBUG_VERBOSE {
             println!("Sending {}", self);
         }
         let destination = format!("{}:{}", node.ip, node.port);
@@ -71,7 +71,7 @@ impl Payload {
         let (size, _) = socket.recv_from(&mut buf)?;
         let payload: Payload = bincode::deserialize(&buf[..size])?;
 
-        if DEBUG {
+        if DEBUG_VERBOSE {
             println!("Received {}", payload);
         }
 
