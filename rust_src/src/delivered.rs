@@ -8,6 +8,8 @@ use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+type Deliverable = (PayloadKind, OwnerID, PacketID);
+
 #[derive(Debug)]
 pub struct DeliveredSet {
     acked: HashMap<SenderID, HashMap<OwnerID, HashSet<PacketID>>>,
@@ -101,102 +103,111 @@ impl AccessDeliveredSet {
                 .entry(payload.owner_id)
                 .or_insert(HashMap::new())
                 .insert(payload.packet_uid, payload.clone());
-            drop(delivered);
 
-            self.try_delivering(payload.kind, payload.owner_id, payload.packet_uid);
+            self.try_delivering(
+                &mut delivered,
+                vec![(payload.kind, payload.owner_id, payload.packet_uid)],
+            );
         }
     }
 
     fn try_delivering(
         &self,
-        kind: PayloadKind,
-        owner_id: OwnerID,
-        packet_uid: PacketID,
+        delivered: &mut MutexGuard<DeliveredSet>,
+        mut deliverable: Vec<Deliverable>,
     ) {
-        let mut delivered = self.delivered.lock().unwrap();
-        let payload = delivered
-            .undelivered
-            .get(&owner_id)
-            .and_then(|undelivered| undelivered.get(&packet_uid));
+        while !deliverable.is_empty() {
+            let (kind, owner_id, packet_uid) = deliverable.pop().unwrap();
+            let payload = delivered
+                .undelivered
+                .get(&owner_id)
+                .and_then(|undelivered| undelivered.get(&packet_uid));
 
-        if matches!(payload, None) {
-            return;
-        }
-        let payload = payload.unwrap().clone();
-
-        let can_deliver = match kind {
-            PayloadKind::Tcp => true,
-            PayloadKind::Beb => true,
-            PayloadKind::Rb => true,
-            PayloadKind::Urb => self.can_urb_deliver(&delivered, owner_id, packet_uid),
-            PayloadKind::Fifob => {
-                self.can_fifob_deliver(&delivered, owner_id, packet_uid)
+            if matches!(payload, None) {
+                return;
             }
-            PayloadKind::Lcb => self.can_lcb_deliver(&delivered, &payload),
-        };
-        if !can_deliver {
-            return;
-        }
+            let payload = payload.unwrap().clone();
 
-        delivered
-            .undelivered
-            .entry(owner_id)
-            .or_insert(HashMap::new())
-            .remove(&packet_uid);
+            let can_deliver = match kind {
+                PayloadKind::Tcp => true,
+                PayloadKind::Beb => true,
+                PayloadKind::Rb => true,
+                PayloadKind::Urb => {
+                    self.can_urb_deliver(delivered, owner_id, packet_uid)
+                }
+                PayloadKind::Fifob => {
+                    self.can_fifob_deliver(delivered, owner_id, packet_uid)
+                }
+                PayloadKind::Lcb => self.can_lcb_deliver(delivered, &payload),
+            };
+            if !can_deliver {
+                return;
+            }
 
-        drop(delivered);
+            delivered
+                .undelivered
+                .entry(owner_id)
+                .or_insert(HashMap::new())
+                .remove(&packet_uid);
 
-        match payload.kind {
-            PayloadKind::Fifob => self.fifob_deliver(&payload),
-            PayloadKind::Lcb => self.lcb_deliver(&payload),
-            _ => self.deliver(&payload),
+            match payload.kind {
+                PayloadKind::Fifob => {
+                    deliverable.append(&mut self.fifob_deliver(delivered, &payload))
+                }
+                PayloadKind::Lcb => {
+                    deliverable.append(&mut self.lcb_deliver(delivered, &payload))
+                }
+                _ => self.deliver(delivered, &payload),
+            }
         }
     }
 
-    fn fifob_deliver(&self, payload: &Payload) {
-        self.deliver(payload);
+    fn fifob_deliver(
+        &self,
+        delivered: &mut MutexGuard<DeliveredSet>,
+        payload: &Payload,
+    ) -> Vec<Deliverable> {
+        self.deliver(delivered, payload);
 
         let next_packet_uid = PacketID(payload.packet_uid.0 + 1);
 
-        self.delivered
-            .lock()
-            .unwrap()
+        delivered
             .received_up_to
             .insert(payload.owner_id, next_packet_uid);
 
-        self.try_delivering(payload.kind, payload.owner_id, next_packet_uid)
+        vec![(payload.kind, payload.owner_id, next_packet_uid)]
     }
 
-    fn lcb_deliver(&self, payload: &Payload) {
-        self.fifob_deliver(payload);
+    fn lcb_deliver(
+        &self,
+        delivered: &mut MutexGuard<DeliveredSet>,
+        payload: &Payload,
+    ) -> Vec<Deliverable> {
+        let mut deliverable = self.fifob_deliver(delivered, payload);
 
-        self.delivered.lock().unwrap().vector_clock[payload.owner_id.0 as usize] += 1;
+        delivered.vector_clock[payload.owner_id.0 as usize] += 1;
 
         if let Some(affected_nodes) =
             self.inverted_causality_map.get(&payload.owner_id.0)
         {
             for affected_node in affected_nodes.iter() {
                 let affected_owner_id = OwnerID(*affected_node);
-                let received_up_to = self
-                    .delivered
-                    .lock()
-                    .unwrap()
+                let received_up_to = delivered
                     .received_up_to
                     .get(&affected_owner_id)
                     .copied()
                     .unwrap_or(PacketID(1));
 
-                self.try_delivering(payload.kind, affected_owner_id, received_up_to);
+                deliverable.push((payload.kind, affected_owner_id, received_up_to));
             }
         }
+        deliverable
     }
 
-    fn deliver(&self, payload: &Payload) {
+    fn deliver(&self, delivered: &mut MutexGuard<DeliveredSet>, payload: &Payload) {
         let contents = String::from_utf8(payload.buffer.clone()).unwrap();
 
-        self.delivered
-            .lock()
-            .unwrap()
+        delivered
             .set
             .entry(payload.owner_id)
             .or_insert(HashSet::new())
