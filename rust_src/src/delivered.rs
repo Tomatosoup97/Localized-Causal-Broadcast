@@ -128,19 +128,7 @@ impl AccessDeliveredSet {
             }
             let payload = payload.unwrap().clone();
 
-            let can_deliver = match kind {
-                PayloadKind::Tcp => true,
-                PayloadKind::Beb => true,
-                PayloadKind::Rb => true,
-                PayloadKind::Urb => {
-                    self.can_urb_deliver(delivered, owner_id, packet_uid)
-                }
-                PayloadKind::Fifob => {
-                    self.can_fifob_deliver(delivered, owner_id, packet_uid)
-                }
-                PayloadKind::Lcb => self.can_lcb_deliver(delivered, &payload),
-            };
-            if !can_deliver {
+            if !self.can_deliver(delivered, &payload) {
                 return;
             }
 
@@ -251,16 +239,30 @@ impl AccessDeliveredSet {
         )
     }
 
+    fn can_deliver(
+        &self,
+        delivered: &MutexGuard<DeliveredSet>,
+        payload: &Payload,
+    ) -> bool {
+        match payload.kind {
+            PayloadKind::Tcp => true,
+            PayloadKind::Beb => true,
+            PayloadKind::Rb => true,
+            PayloadKind::Urb => self.can_urb_deliver(delivered, payload),
+            PayloadKind::Fifob => self.can_fifob_deliver(delivered, payload),
+            PayloadKind::Lcb => self.can_lcb_deliver(delivered, payload),
+        }
+    }
+
     fn can_urb_deliver(
         &self,
         delivered: &MutexGuard<DeliveredSet>,
-        owner_id: OwnerID,
-        packet_uid: PacketID,
+        payload: &Payload,
     ) -> bool {
         let acked_count = delivered
             .acked_counter
-            .get(&owner_id)
-            .and_then(|acked_counter| acked_counter.get(&packet_uid));
+            .get(&payload.owner_id)
+            .and_then(|acked_counter| acked_counter.get(&payload.packet_uid));
         match acked_count {
             Some(acked_count) => *acked_count >= self.majority(),
             None => false,
@@ -270,17 +272,16 @@ impl AccessDeliveredSet {
     fn can_fifob_deliver(
         &self,
         delivered: &MutexGuard<DeliveredSet>,
-        owner_id: OwnerID,
-        packet_uid: PacketID,
+        payload: &Payload,
     ) -> bool {
-        let urb_happy = self.can_urb_deliver(delivered, owner_id, packet_uid);
+        let urb_happy = self.can_urb_deliver(delivered, payload);
 
         let received_up_to = delivered
             .received_up_to
-            .get(&owner_id)
+            .get(&payload.owner_id)
             .copied()
             .unwrap_or(PacketID(1));
-        let order_happy = packet_uid == received_up_to;
+        let order_happy = payload.packet_uid == received_up_to;
         urb_happy && order_happy
     }
 
@@ -289,8 +290,7 @@ impl AccessDeliveredSet {
         delivered: &MutexGuard<DeliveredSet>,
         payload: &Payload,
     ) -> bool {
-        let fifob_happy =
-            self.can_fifob_deliver(delivered, payload.owner_id, payload.packet_uid);
+        let fifob_happy = self.can_fifob_deliver(delivered, payload);
 
         let dependencies = self.causality_map.get(&payload.owner_id.0);
         let lcb_happy = match dependencies {

@@ -92,7 +92,7 @@ pub fn enqueue_messages(
         &tcp_handler,
         &tx_writing_channel,
         messages_count,
-        PayloadKind::Lcb,
+        PayloadKind::Fifob,
     )?;
     Ok(())
 }
