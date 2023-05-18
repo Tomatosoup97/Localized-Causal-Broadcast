@@ -92,6 +92,8 @@ pub fn keep_receiving_messages(
         tcp_handler.delivered.insert(payload.sender_id, &payload);
 
         match payload.kind {
+            PayloadKind::Tcp => {}
+            PayloadKind::Beb => {}
             PayloadKind::Rb => {
                 broadcast::reliable_broadcast(&tcp_handler, &payload);
             }
@@ -101,7 +103,9 @@ pub fn keep_receiving_messages(
             PayloadKind::Fifob => {
                 broadcast::fifo_broadcast(&tcp_handler, &payload);
             }
-            _ => {} // nothing to do
+            PayloadKind::Lcb => {
+                broadcast::localized_causal_broadcast(&tcp_handler, &payload);
+            }
         }
     }
 }

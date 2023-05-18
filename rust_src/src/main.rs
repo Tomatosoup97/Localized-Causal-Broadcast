@@ -15,7 +15,7 @@ mod udp;
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let program_args = config_parser::ProgramArgs::parse()?;
-    let config = config_parser::Config::read(&program_args.config)?;
+    let config = config_parser::ConfigLcb::read(&program_args.config)?;
     let nodes = hosts::read_hosts(&program_args.hosts)?;
     config_parser::create_output_file(&program_args.output)?;
 
@@ -30,6 +30,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         println!("------------------");
     }
 
+    let messages_count = config.messages_count;
+    let causality_map = config.causality_map;
+    let inverted_causality_map = config.inverted_causality_map;
+
     let socket = udp::bind_socket(&current_node.ip, current_node.port)?;
 
     let (tx_sending, rx_sending) = mpsc::channel::<tcp::Message>();
@@ -38,10 +42,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let delivered_tx_writing = tx_writing.clone();
     let delivered = delivered::AccessDeliveredSet::new(
-        delivered::DeliveredSet::new(),
+        delivered::DeliveredSet::new(nodes.len()),
         delivered_tx_writing,
-        nodes.len() as u32,
+        nodes.len(),
         current_node_id,
+        causality_map,
+        inverted_causality_map,
     );
 
     let tcp_handler = tcp::TcpHandler {
@@ -85,11 +91,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let enqueuer_config = config;
-
     let enqueuer_thread = thread::spawn(move || {
         if let Err(e) =
-            enqueue::enqueue_messages(tcp_handler, tx_writing, enqueuer_config)
+            enqueue::enqueue_messages(tcp_handler, tx_writing, messages_count)
         {
             panic!("Error: {}", e)
         }

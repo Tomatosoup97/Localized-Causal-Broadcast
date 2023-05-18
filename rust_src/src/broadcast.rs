@@ -18,24 +18,19 @@ pub fn best_effort_broadcast(tcp_handler: &TcpHandler, payload: &Payload) {
 }
 
 pub fn reliable_broadcast(tcp_handler: &TcpHandler, payload: &Payload) {
-    if DEBUG {
-        println!("RB: {}", payload);
-    }
     if !tcp_handler.delivered.was_seen(payload) {
         best_effort_broadcast(tcp_handler, payload);
     }
 }
 
 pub fn uniform_reliable_broadcast(tcp_handler: &TcpHandler, payload: &Payload) {
-    if DEBUG {
-        println!("URB: {}", payload);
-    }
     reliable_broadcast(tcp_handler, payload);
 }
 
 pub fn fifo_broadcast(tcp_handler: &TcpHandler, payload: &Payload) {
-    if DEBUG {
-        println!("FIFOB: {}", payload);
-    }
     uniform_reliable_broadcast(tcp_handler, payload);
+}
+
+pub fn localized_causal_broadcast(tcp_handler: &TcpHandler, payload: &Payload) {
+    fifo_broadcast(tcp_handler, payload);
 }

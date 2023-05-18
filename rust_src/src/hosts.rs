@@ -4,11 +4,12 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::{fmt, fmt::Display, fmt::Formatter};
 
+pub type NodeID = u32;
 pub type Nodes = HashMap<u32, Node>;
 
 #[derive(Debug, Clone)]
 pub struct Node {
-    pub id: u32,
+    pub id: NodeID,
     pub ip: String,
     pub port: u32,
 }

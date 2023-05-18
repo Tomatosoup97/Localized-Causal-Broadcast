@@ -44,10 +44,10 @@ pub fn enqueue_tcp_messages(
 pub fn enqueue_broadcast_messages(
     tcp_handler: &TcpHandler,
     tx_writing_channel: &mpsc::Sender<LogEvent>,
-    config: &Config,
+    messages_count: u32,
     kind: PayloadKind,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for i in 1..config.messages_count + 1 {
+    for i in 1..messages_count + 1 {
         let contents = i.to_string();
         let payload = Payload {
             owner_id: OwnerID(tcp_handler.current_node_id),
@@ -55,7 +55,7 @@ pub fn enqueue_broadcast_messages(
             packet_uid: PacketID(i),
             kind,
             is_ack: false,
-            vector_clock: vec![0],
+            vector_clock: tcp_handler.delivered.clone_vector_clock(),
             buffer: contents.as_bytes().to_vec(),
         };
 
@@ -71,6 +71,9 @@ pub fn enqueue_broadcast_messages(
                 broadcast::uniform_reliable_broadcast(tcp_handler, &payload)
             }
             PayloadKind::Fifob => broadcast::fifo_broadcast(tcp_handler, &payload),
+            PayloadKind::Lcb => {
+                broadcast::localized_causal_broadcast(tcp_handler, &payload)
+            }
             _ => panic!("Invalid payload kind to broadcast"),
         }
     }
@@ -80,13 +83,16 @@ pub fn enqueue_broadcast_messages(
 pub fn enqueue_messages(
     tcp_handler: TcpHandler,
     tx_writing_channel: mpsc::Sender<LogEvent>,
-    config: Config,
+    messages_count: u32,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // let vector clock fill up a bit
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
     enqueue_broadcast_messages(
         &tcp_handler,
         &tx_writing_channel,
-        &config,
-        PayloadKind::Fifob,
+        messages_count,
+        PayloadKind::Lcb,
     )?;
     Ok(())
 }

@@ -1,3 +1,5 @@
+use crate::hosts::NodeID;
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -32,6 +34,52 @@ impl Config {
         Ok(Config {
             messages_count,
             receiver_id,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct ConfigLcb {
+    pub messages_count: u32,
+    pub causality_map: HashMap<NodeID, Vec<NodeID>>,
+    pub inverted_causality_map: HashMap<NodeID, Vec<NodeID>>,
+}
+
+impl ConfigLcb {
+    pub fn read(path: &str) -> Result<ConfigLcb, Box<dyn std::error::Error>> {
+        let file = File::open(Path::new(path))?;
+        let reader = BufReader::new(file);
+
+        let mut lines = reader.lines();
+
+        let messages_count = lines
+            .next()
+            .ok_or("Invalid config file format")??
+            .parse::<u32>()?;
+
+        let mut causality_map = HashMap::new();
+        let mut inverted_causality_map = HashMap::new();
+
+        for (process_id, line) in lines.enumerate() {
+            let line = line?;
+            let dependencies: Vec<u32> = line
+                .split_whitespace()
+                .map(|id| id.parse::<u32>())
+                .collect::<Result<Vec<u32>, _>>()?;
+
+            for dependency in dependencies.iter() {
+                inverted_causality_map
+                    .entry(*dependency)
+                    .or_insert_with(Vec::new)
+                    .push(process_id as u32);
+            }
+            causality_map.insert(process_id as u32, dependencies);
+        }
+
+        Ok(ConfigLcb {
+            messages_count,
+            causality_map,
+            inverted_causality_map,
         })
     }
 }

@@ -34,6 +34,8 @@ impl Display for PacketID {
     }
 }
 
+pub type VectorClock = Vec<u32>;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum PayloadKind {
     Tcp,
@@ -41,6 +43,7 @@ pub enum PayloadKind {
     Rb,
     Urb,
     Fifob,
+    Lcb,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,7 +53,7 @@ pub struct Payload {
     pub packet_uid: PacketID,
     pub kind: PayloadKind,
     pub is_ack: bool,
-    pub vector_clock: Vec<u32>,
+    pub vector_clock: VectorClock,
     pub buffer: Vec<u8>,
 }
 
